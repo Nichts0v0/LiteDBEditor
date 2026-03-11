@@ -1,0 +1,43 @@
+## [Visual Studio]
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## [Build Outputs]
+bin/
+obj/
+[Ee]xec/
+Publish/
+publish/
+
+## [OS / IDE]
+.idea/
+.vscode/
+*.swp
+*.DS_Store
+Thumbs.db
+
+## [NuGet]
+*.nupkg
+*.snupkg
+# Restore packages
+packages/
+
+## [C# / .NET]
+*.pfx
+*.publishsettings
+*.log
+*.tmp
+
+## [Avalonia Specific]
+# Generated files by Avalonia
+*.axaml.g.cs
+*.axaml.cs.g
+
+## [User Preferences]
+*.user
+*.suo
+*.userosscache
+*.sln.docstates

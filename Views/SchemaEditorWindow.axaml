@@ -1,0 +1,243 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LiteDBEditor.ViewModels"
+        xmlns:models="using:LiteDBEditor.Models"
+        xmlns:conv="clr-namespace:LiteDBEditor.Converters;assembly=LiteDBEditor"
+        x:Class="LiteDBEditor.Views.SchemaEditorWindow"
+        x:DataType="vm:SchemaEditorViewModel"
+        Title="可视化模板编辑器"
+        Icon="/Assets/ldbe-256.ico"
+        Width="950" Height="700"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <conv:EqualsConverter x:Key="EqualsConverter" />
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="TextBox.error">
+            <Setter Property="BorderBrush" Value="Red"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="ComboBox.error">
+            <Setter Property="BorderBrush" Value="Red"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid ColumnDefinitions="280, 1, *" Margin="0">
+        <!-- Sidebar: List of Classes -->
+        <Border Grid.Column="0" Background="{DynamicResource SemiColorFill0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto, *, Auto" Margin="16">
+                <StackPanel Grid.Row="0" Spacing="16" Margin="0,0,0,16">
+                    <TextBlock Text="模板架构管理" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+                    
+                    <StackPanel Spacing="8">
+                         <TextBlock Text="主类 (Root Class)" Foreground="{DynamicResource SemiColorText2}" FontSize="12" FontWeight="SemiBold"/>
+                         <Button Theme="{DynamicResource LightButton}" 
+                                 HorizontalAlignment="Stretch" 
+                                 Command="{Binding SelectMainClassCommand}" 
+                                 Padding="12,8">
+                             <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{StaticResource IconDocument}" Width="14" Height="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                <TextBlock Text="{Binding MainClass.ClassName}" FontWeight="Bold"/>
+                             </StackPanel>
+                         </Button>
+                    </StackPanel>
+                    
+                    <Separator Background="{DynamicResource SemiColorBorder}"/>
+                    <TextBlock Text="辅助内嵌类 (Inner Classes)" Foreground="{DynamicResource SemiColorText2}" FontSize="12" FontWeight="SemiBold"/>
+                </StackPanel>
+
+                <ListBox Grid.Row="1" ItemsSource="{Binding MainClass.InnerClasses}" 
+                         SelectedItem="{Binding SelectedInnerClass}"
+                         Background="Transparent"
+                         Margin="0,0,0,8">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="CornerRadius" Value="6"/>
+                            <Setter Property="Margin" Value="0,4"/>
+                            <Setter Property="Padding" Value="10,8"/>
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Text="{Binding ClassName}" VerticalAlignment="Center" FontSize="13"/>
+                                <Button Grid.Column="1" Theme="{DynamicResource BorderlessButton}"
+                                        Foreground="{DynamicResource SemiColorDanger}" 
+                                        Command="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).RemoveInnerClassCommand}"
+                                        CommandParameter="{Binding}">
+                                    <PathIcon Data="{StaticResource IconCancel}" Width="12" Height="12"/>
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+ 
+                <StackPanel Grid.Row="2" Spacing="12">
+                    <Button Theme="{DynamicResource SolidButton}" 
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding AddInnerClassCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14"/>
+                            <TextBlock Text="添加辅助类"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Expander Header="使用现有模板" IsExpanded="False" Theme="{DynamicResource SimpleExpander}">
+                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                            <ListBox ItemsSource="{Binding ExistingSchemas}" MaxHeight="120" x:Name="ExistingSchemasList" Background="{DynamicResource SemiColorFill1}" CornerRadius="4">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Padding="4" FontSize="12"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Button Theme="{DynamicResource LightButton}" Content="加载选中模板" HorizontalAlignment="Stretch" Click="OnUseExistingClick" FontSize="12"/>
+                            <Button Theme="{DynamicResource BorderlessButton}" Content="从文件浏览..." HorizontalAlignment="Stretch" Click="OnBrowseFileClick" FontSize="12"/>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+            </Grid>
+        </Border>
+ 
+        <GridSplitter Grid.Column="1" Width="1" Background="Transparent"/>
+ 
+        <!-- Main Workspace -->
+        <Grid Grid.Column="2" RowDefinitions="Auto, *, Auto" Margin="24">
+            <!-- Class Header -->
+            <Border Grid.Row="0" Background="{DynamicResource SemiColorFill1}" Padding="16" CornerRadius="8" Margin="0,0,0,20">
+                <Grid ColumnDefinitions="Auto, *, Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                        <PathIcon Data="{StaticResource IconEdit}" Width="20" Height="20" Foreground="{DynamicResource SemiColorPrimary}"/>
+                        <TextBlock Text="正在配置类:" VerticalAlignment="Center" FontWeight="Bold" FontSize="15"/>
+                    </StackPanel>
+                    <TextBox Grid.Column="1" Text="{Binding CurrentEditingClass.ClassName}" 
+                             Margin="12,0"
+                             Classes="Large"
+                             Classes.error="{Binding !CurrentEditingClass.IsValid}"
+                             ToolTip.Tip="{Binding CurrentEditingClass.ErrorDetail}"
+                             Watermark="例如: PlayerItemConfig"/>
+                    <Border Grid.Column="2" IsVisible="{Binding !CurrentEditingClass.IsValid}" 
+                            Background="{DynamicResource SemiColorDanger}" CornerRadius="12" Padding="8,2">
+                        <TextBlock Text="名称无效" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                    </Border>
+                </Grid>
+            </Border>
+ 
+            <!-- Fields List -->
+            <Border Grid.Row="1" Background="Transparent" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8">
+                <ScrollViewer Padding="12">
+                    <ItemsControl ItemsSource="{Binding CurrentEditingClass.Fields}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:FieldDefinition">
+                                <Border Background="{DynamicResource SemiColorFill0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                                    <Grid RowDefinitions="Auto, Auto">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*, 150, Auto" ColumnSpacing="16">
+                                            <!-- Field Name -->
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="变量名" FontSize="11" Foreground="{DynamicResource SemiColorText2}" FontWeight="SemiBold"/>
+                                                <TextBox Text="{Binding FieldName}" 
+                                                         Classes.error="{Binding !IsValid}"
+                                                         ToolTip.Tip="{Binding ErrorDetail}"
+                                                         Watermark="my_field_name"/>
+                                            </StackPanel>
+                                            
+                                            <!-- Field Type -->
+                                            <StackPanel Spacing="4" Grid.Column="1">
+                                                <TextBlock Text="类型" FontSize="11" Foreground="{DynamicResource SemiColorText2}" FontWeight="SemiBold"/>
+                                                <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableTypes}"
+                                                          SelectedItem="{Binding Type}" HorizontalAlignment="Stretch"/>
+                                            </StackPanel>
+                                            
+                                            <!-- Delete Button -->
+                                            <Button Grid.Column="2" Theme="{DynamicResource BorderlessButton}" 
+                                                    Foreground="{DynamicResource SemiColorDanger}"
+                                                    VerticalAlignment="Bottom" Margin="0,0,0,4"
+                                                    Command="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).RemoveFieldCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <PathIcon Data="{StaticResource IconDelete}" Width="16" Height="16"/>
+                                            </Button>
+                                        </Grid>
+ 
+                                        <!-- Configuration Area for Complex Types -->
+                                        <Border Grid.Row="1" IsVisible="{Binding Type, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                                                Background="{DynamicResource SemiColorFill1}" CornerRadius="6" Padding="12" Margin="0,12,0,0">
+                                            <StackPanel Spacing="12">
+                                                <!-- List Configuration -->
+                                                <StackPanel Orientation="Horizontal" Spacing="12" 
+                                                           IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.List}}">
+                                                    <TextBlock Text="List 元素类型:" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"/>
+                                                    <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableSubTypes}"
+                                                              SelectedItem="{Binding SubType}" Width="120"/>
+                                                    
+                                                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SubType, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
+                                                        <TextBlock Text="➜ 对象类名:" VerticalAlignment="Center" FontSize="13"/>
+                                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                                  SelectedItem="{Binding SubCustomTypeName}" Width="180"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+ 
+                                                <!-- Dictionary Configuration -->
+                                                <StackPanel Orientation="Horizontal" Spacing="12" 
+                                                           IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Dictionary}}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="Key:" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"/>
+                                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableKeyTypes}"
+                                                                  SelectedItem="{Binding KeyType}" Width="120"/>
+                                                    </StackPanel>
+                                                    <PathIcon Data="{StaticResource IconLink}" Width="12" Height="12" Foreground="{DynamicResource SemiColorText3}" VerticalAlignment="Center"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="Value:" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"/>
+                                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableSubTypes}"
+                                                                  SelectedItem="{Binding SubType}" Width="120"/>
+                                                    </StackPanel>
+                                                    
+                                                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SubType, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
+                                                        <TextBlock Text="➜ 对象类名:" VerticalAlignment="Center" FontSize="13"/>
+                                                        <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                                  SelectedItem="{Binding SubCustomTypeName}" Width="160"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+ 
+                                                <!-- Custom Class Configuration -->
+                                                <StackPanel Orientation="Horizontal" Spacing="12"
+                                                           IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
+                                                    <TextBlock Text="选择已定义类型:" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"/>
+                                                    <ComboBox ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                              SelectedItem="{Binding CustomTypeName}" Width="250"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+ 
+            <!-- Bottom Actions -->
+            <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,20,0,0">
+                <Button Grid.Column="0" Theme="{DynamicResource LightButton}" 
+                        Command="{Binding AddFieldCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14"/>
+                        <TextBlock Text="添加变量定义"/>
+                    </StackPanel>
+                </Button>
+                
+                <TextBlock Grid.Column="1" Text="{Binding ErrorMessage}" 
+                           Foreground="{DynamicResource SemiColorDanger}" 
+                           VerticalAlignment="Center" TextAlignment="Center" FontSize="13" FontWeight="Bold"/>
+ 
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12">
+                    <Button Theme="{DynamicResource LightButton}" Content="预览 C# 代码" IsVisible="False"/> <!-- Placeholder for future feature -->
+                    <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100" Click="OnCancelClick"/>
+                    <Button Theme="{DynamicResource SolidButton}" Classes="Primary" Content="保 存" Width="120" Click="OnSaveClick"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

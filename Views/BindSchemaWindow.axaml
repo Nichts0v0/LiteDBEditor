@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LiteDBEditor.Views.BindSchemaWindow"
+        Title="绑定模板 (Bind Schema)"
+        Icon="/Assets/ldbe-256.ico"
+        Width="450" Height="220"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    
+    <Grid Margin="20" RowDefinitions="Auto, *, Auto">
+        <StackPanel Grid.Row="0" Margin="0,0,0,16" Spacing="4">
+            <TextBlock Text="绑定数据模板" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+            <TextBlock Text="请选择一个 C# 类定义作为该集合的结构骨架" FontSize="12" Foreground="{DynamicResource SemiColorText2}"/>
+        </StackPanel>
+        
+        <StackPanel Grid.Row="1" Spacing="12">
+            <Grid ColumnDefinitions="*, Auto">
+                <ComboBox x:Name="HistoryComboBox" Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,8,0" PlaceholderText="从历史记录选择..." SelectionChanged="OnHistorySelectionChanged"/>
+                <Button Grid.Column="1" Theme="{DynamicResource LightButton}" Click="OnSelectCodeTemplateClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconFolderOpen}" Width="14" Height="14"/>
+                        <TextBlock Text="浏览文件"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Background="{DynamicResource SemiColorFill0}" CornerRadius="6" Padding="10,6" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                <TextBlock x:Name="TemplatePathText" Text="未设定模板" Foreground="{DynamicResource SemiColorText3}" FontSize="12" FontStyle="Italic"/>
+            </Border>
+        </StackPanel>
+        
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,16,0,0">
+            <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100" Click="OnCancelClick" IsCancel="True"/>
+            <Button Theme="{DynamicResource SolidButton}" Content="确定" Width="100" Click="OnOkClick" IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

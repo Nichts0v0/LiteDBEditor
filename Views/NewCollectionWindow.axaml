@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LiteDBEditor.Views.NewCollectionWindow"
+        Title="新建表 (Collection)"
+        Icon="/Assets/ldbe-256.ico"
+        Width="500" Height="520"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    
+    <Window.Resources>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="TextBox.error /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="Red"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Background" Value="#FFF0F0"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid Margin="24" RowDefinitions="Auto, *, Auto">
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,24" Spacing="4">
+            <TextBlock Text="新建集合" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SemiColorText0}"/>
+            <TextBlock Text="请输入集合名称并选择可选的 C# 模板以定义数据结构" Foreground="{DynamicResource SemiColorText2}" FontSize="13"/>
+        </StackPanel>
+        
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="20">
+                <!-- Section: Name -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="集合名称" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                    <TextBox x:Name="NameTextBox" 
+                             Classes="Large"
+                             Watermark="例如: Players, Items, Configs" 
+                             TextChanged="OnNameTextChanged"/>
+                </StackPanel>
+ 
+                <!-- Section: Schema -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="数据结构模板 (可选)" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource SemiColorText1}"/>
+                    <Grid ColumnDefinitions="*, Auto" Margin="0,0,0,8">
+                        <ComboBox x:Name="HistoryComboBox" Grid.Column="0" 
+                                  HorizontalAlignment="Stretch" Margin="0,0,8,0" 
+                                  PlaceholderText="选择历史模板..." 
+                                  SelectionChanged="OnHistorySelectionChanged"/>
+                        <Button Grid.Column="1" Theme="{DynamicResource LightButton}"
+                                Click="OnSelectCodeTemplateClick">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Data="{StaticResource IconFolderOpen}" Width="14" Height="14"/>
+                                <TextBlock Text="浏览文件"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <Border Background="{DynamicResource SemiColorFill0}" CornerRadius="6" Padding="12" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconDocument}" Width="16" Height="16" Foreground="{DynamicResource SemiColorText3}"/>
+                            <TextBlock x:Name="TemplatePathText" 
+                                       Text="未设定模板。将创建无预定义结构的空表。" 
+                                       Foreground="{DynamicResource SemiColorText3}" FontSize="12" 
+                                       FontStyle="Italic" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+        
+        <StackPanel Grid.Row="2" Spacing="16" Margin="0,24,0,0">
+            <!-- 状态/错误提示区 -->
+            <Border Background="{DynamicResource SemiColorFill0}" 
+                    BorderBrush="{DynamicResource SemiColorBorder}"
+                    BorderThickness="1"
+                    CornerRadius="6" 
+                    Padding="12,8"
+                    x:Name="ErrorBorder">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <PathIcon Data="{StaticResource IconWarning}" Width="14" Height="14" Foreground="{DynamicResource SemiColorText2}"/>
+                    <TextBlock x:Name="ErrorText" 
+                               Foreground="{DynamicResource SemiColorText2}" 
+                               FontSize="12" 
+                               TextWrapping="Wrap"
+                               Text="等待输入..." VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+ 
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+                <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100" Click="OnCancelClick"/>
+                <Button Theme="{DynamicResource SolidButton}" Content="确定" Width="100" Click="OnOkClick"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

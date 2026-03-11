@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LiteDBEditor.Views.ConfirmWindow"
+        Title="确认"
+        Icon="/Assets/ldbe-256.ico"
+        Width="420" Height="220"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <Grid RowDefinitions="*, Auto" Margin="24">
+        <StackPanel Grid.Row="0" Spacing="16" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <PathIcon Data="{StaticResource IconWarning}" Width="32" Height="32" Foreground="{DynamicResource SemiColorWarning}" HorizontalAlignment="Center"/>
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="TitleText" Text="确认操作" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center" Foreground="{DynamicResource SemiColorText0}"/>
+                <TextBlock x:Name="MessageText" Text="您确定要执行此操作吗？" FontSize="13" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" Foreground="{DynamicResource SemiColorText2}"/>
+            </StackPanel>
+        </StackPanel>
+        
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+            <Button Theme="{DynamicResource LightButton}" Content="取消" Click="OnCancelClick" Width="90" IsCancel="True"/>
+            <Button Theme="{DynamicResource SolidButton}" Classes="Danger" Content="确认执行" Click="OnConfirmClick" Width="100" IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

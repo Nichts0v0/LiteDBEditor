@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LiteDBEditor.ViewModels"
+        x:Class="LiteDBEditor.Views.CollectionEditorWindow"
+        x:DataType="vm:CollectionEditorViewModel"
+        Title="{Binding Title}"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/ldbe-256.ico"
+        Width="480" Height="520">
+
+    <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="18" FontWeight="Bold" Margin="0,0,0,16" Foreground="{DynamicResource SemiColorText0}"/>
+
+        <!-- Items List -->
+        <Border Grid.Row="1" Background="{DynamicResource SemiColorFill0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8">
+            <ScrollViewer Padding="8">
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:CollectionItemRow">
+                            <Border Background="{DynamicResource SemiColorFill1}" CornerRadius="6" Margin="0,0,0,8" Padding="12,10">
+                                <Grid ColumnDefinitions="100, *, Auto">
+                                    <!-- Index/Key Label -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding KeyLabel}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SemiColorText1}"/>
+                                    <!-- Value Preview -->
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ValuePreview}"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource SemiColorText3}"
+                                               Margin="12,0"/>
+                                    
+                                    <!-- Action Buttons -->
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                                        <Button Theme="{DynamicResource BorderlessButton}"
+                                                Click="OnEditItemClick"
+                                                ToolTip.Tip="编辑此项">
+                                            <PathIcon Data="{StaticResource IconEdit}" Width="14" Height="14" Foreground="{DynamicResource SemiColorPrimary}"/>
+                                        </Button>
+                                        <Button Theme="{DynamicResource BorderlessButton}"
+                                                Foreground="{DynamicResource SemiColorDanger}"
+                                                Click="OnDeleteItemClick"
+                                                ToolTip.Tip="删除此项">
+                                            <PathIcon Data="{StaticResource IconDelete}" Width="14" Height="14"/>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+ 
+        <!-- Footer Area -->
+        <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,16,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <PathIcon Data="{StaticResource IconDocument}" Width="12" Height="12" Foreground="{DynamicResource SemiColorText3}"/>
+                <TextBlock Text="{Binding Items.Count, StringFormat='共 {0} 个条目'}"
+                           FontSize="12"
+                           Foreground="{DynamicResource SemiColorText3}"/>
+            </StackPanel>
+            
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                <Button Theme="{DynamicResource LightButton}" Content="关闭" Width="80" Click="OnCloseClick" IsCancel="True" IsDefault="True"/>
+                <Button Theme="{DynamicResource SolidButton}" Click="OnAddItemClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14"/>
+                        <TextBlock Text="新增条目"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

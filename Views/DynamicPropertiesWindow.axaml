@@ -1,0 +1,110 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LiteDBEditor.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="500"
+        x:Class="LiteDBEditor.Views.DynamicPropertiesWindow"
+        x:DataType="vm:DynamicPropertiesViewModel"
+        Title="{Binding Title}"
+        Icon="/Assets/ldbe-256.ico"
+        WindowStartupLocation="CenterOwner"
+        Width="500" Height="600">
+    <Window.Resources>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- 输入框错误状态：强制背景和边框 -->
+        <Style Selector="TextBox.error /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="Red"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Background" Value="#FFF0F0"/>
+        </Style>
+        <Style Selector="CheckBox.error /template/ Border#NormalRectangle">
+            <Setter Property="BorderBrush" Value="Red"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="18" FontWeight="Bold" Margin="0,0,0,16" Foreground="{DynamicResource SemiColorText0}"/>
+
+        <ScrollViewer Grid.Row="1">
+            <ItemsControl ItemsSource="{Binding Properties}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:DynamicPropertyItemViewModel">
+                        <!-- Property Item Card -->
+                        <Border Background="{DynamicResource SemiColorFill0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid ColumnDefinitions="140, *">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding DisplayName}" 
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" 
+                                           Foreground="{DynamicResource SemiColorText1}"
+                                           Margin="0,0,16,0" />
+                                
+                                <Panel Grid.Column="1" VerticalAlignment="Center">
+                                    <!-- String Editor -->
+                                    <TextBox Text="{Binding Value, Mode=TwoWay}" 
+                                             IsVisible="{Binding IsStringEditorVisible}" 
+                                             IsReadOnly="{Binding IsReadOnly}"
+                                             Classes.error="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+ 
+                                    <!-- Numeric Editor -->
+                                    <TextBox Text="{Binding Value, Mode=TwoWay}"
+                                             IsVisible="{Binding IsNumericEditorVisible}"
+                                             IsReadOnly="{Binding IsReadOnly}"
+                                             Loaded="OnNumericTextBoxLoaded"
+                                             Classes.error="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+ 
+                                    <!-- Boolean Editor -->
+                                    <CheckBox IsChecked="{Binding Value, Mode=TwoWay}"
+                                              IsVisible="{Binding IsBooleanEditorVisible}" 
+                                              IsEnabled="{Binding !IsReadOnly}"
+                                              Theme="{DynamicResource PureCheckBox}"
+                                              Classes.error="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+ 
+                                    <!-- Complex Type Preview & Edit -->
+                                    <Grid IsVisible="{Binding IsComplexEditorVisible}" ColumnDefinitions="*, Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding ComplexTypePreview}" 
+                                                   VerticalAlignment="Center" FontSize="12" 
+                                                   Foreground="{DynamicResource SemiColorText3}"
+                                                   FontStyle="Italic"/>
+                                        <Button Grid.Column="1" Theme="{DynamicResource LightButton}"
+                                                Width="32" Height="32" Padding="0"
+                                                Click="OnEditComplexValue_Click">
+                                            <PathIcon Data="{StaticResource IconEdit}" Width="14" Height="14"/>
+                                        </Button>
+                                    </Grid>
+                                </Panel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+ 
+        <!-- Footer Area -->
+        <Border Grid.Row="2" Background="{DynamicResource SemiColorFill1}" CornerRadius="12" Padding="16" Margin="0,16,0,0">
+            <Grid ColumnDefinitions="*, Auto">
+                <!-- Status/Error Box -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <PathIcon Data="{StaticResource IconWarning}" Width="14" Height="14" 
+                              Foreground="{Binding WindowErrorMessage, Converter={x:Static vm:WindowConverters.ErrorForegroundConverter}}"/>
+                    <TextBlock Text="{Binding WindowErrorMessage, FallbackValue='数据验证中...'}" 
+                               Foreground="{Binding WindowErrorMessage, Converter={x:Static vm:WindowConverters.ErrorForegroundConverter}}" 
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+ 
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                    <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100" Click="OnCancelClick" IsCancel="True"/>
+                    <Button Theme="{DynamicResource SolidButton}" Content="保存修改" Width="120" Click="OnSaveClick" IsDefault="True"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,661 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using LiteDB;
+using LiteDBEditor.Models;
+using LiteDBEditor.Services;
+using LiteDBEditor.ViewModels;
+
+namespace LiteDBEditor.Views;
+
+public partial class MainWindow : Window
+{
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.SchemaLoaded -= OnSchemaLoaded;
+            vm.SchemaLoaded += OnSchemaLoaded;
+        }
+    }
+
+    #region 列模板生成
+
+    private void OnSchemaLoaded(object? sender, SchemaData schemaData)
+    {
+        if (MainDataGrid == null) return;
+
+        // 使用 Dispatcher 确保在 UI 线程执行，并降低优先级防止与布局冲突
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                Console.WriteLine($"[UI] Rebuilding columns for: {schemaData.TargetName}");
+
+                // 暂时断开数据源绑定，防止列变动时触发不必要的渲染计算
+                var oldItemsSource = MainDataGrid.ItemsSource;
+                MainDataGrid.ItemsSource = null;
+
+                // 保留第一列 "Actions" 按钮列，清除其它生成的动态列
+                while (MainDataGrid.Columns.Count > 1)
+                    MainDataGrid.Columns.RemoveAt(1);
+
+                foreach (var prop in schemaData.Properties)
+                {
+                    // 复杂类型（数组/字典/嵌套类）
+                    var isComplex = prop.TypeName is "Array" or "Dictionary" or "Document";
+                    var isReadOnly = false;
+
+                    var capturedProp = prop;
+
+                    var column = new DataGridTemplateColumn
+                    {
+                        Header = $"{prop.DisplayName} ({prop.TypeName})",
+                        Tag = prop.Name,
+                        IsReadOnly = isReadOnly,
+                        CanUserSort = !isComplex,
+                        SortMemberPath = isComplex ? null : $"[{prop.Name}]"
+                    };
+
+                    // ---- CellTemplate ----
+                    var cellTemplate = new FuncDataTemplate<BsonDocumentWrapper>((data, _) =>
+                    {
+                        if (data == null) return null; // 增强安全性
+                        if (isComplex)
+                        {
+                            var grid = new Grid { ColumnDefinitions = new Avalonia.Controls.ColumnDefinitions("Auto, *") };
+                            var editBtn = new Button
+                            {
+                                Content = "✏",
+                                Margin = new Avalonia.Thickness(8, 0, 0, 0),
+                                Width = 28,
+                                Height = 22,
+                                Padding = new Avalonia.Thickness(0),
+                                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                            };
+                            ToolTip.SetTip(editBtn, $"编辑 {capturedProp.DisplayName}");
+
+                            // 重构：不要在闭包里捕获 data (BsonDocumentWrapper)，
+                            // 否则 DataGrid 排序或滚动复用后，捕获的依然是旧对象。
+                            // 应该从按钮此时绑定的 DataContext 中实时获取。
+                            editBtn.Click += async (s, _) =>
+                            {
+                                if (s is Button b && b.DataContext is BsonDocumentWrapper currentWrapper)
+                                {
+                                    await OpenComplexFieldEditorAsync(currentWrapper, capturedProp);
+                                }
+                            };
+                            Grid.SetColumn(editBtn, 0);
+
+                            var preview = new TextBlock { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Avalonia.Thickness(5, 0), TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis };
+                            preview.Bind(TextBlock.TextProperty, new Binding($"[{capturedProp.Name}]"));
+                            var colorBinding = new MultiBinding { Converter = Converters.ModifiedFieldColorConverter.Instance, ConverterParameter = capturedProp.Name };
+                            colorBinding.Bindings.Add(new Binding("."));
+                            colorBinding.Bindings.Add(new Binding("IsModified"));
+                            preview.Bind(TextBlock.ForegroundProperty, colorBinding);
+                            Grid.SetColumn(preview, 1);
+                            grid.Children.Add(editBtn);
+                            grid.Children.Add(preview);
+                            return grid;
+                        }
+                        else
+                        {
+                            var textBlock = new TextBlock { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Avalonia.Thickness(5, 0) };
+                            textBlock.Bind(TextBlock.TextProperty, new Binding($"[{capturedProp.Name}]"));
+                            var multiBinding = new MultiBinding { Converter = Converters.ModifiedFieldColorConverter.Instance, ConverterParameter = capturedProp.Name };
+                            multiBinding.Bindings.Add(new Binding("."));
+                            multiBinding.Bindings.Add(new Binding("IsModified"));
+                            textBlock.Bind(TextBlock.ForegroundProperty, multiBinding);
+                            return textBlock;
+                        }
+                    }, true);
+                    column.CellTemplate = cellTemplate;
+
+                    if (!isReadOnly)
+                    {
+                        var capturedTypeName = capturedProp.TypeName;
+                        var editingTemplate = new FuncDataTemplate<BsonDocumentWrapper>((data, _) =>
+                        {
+                            var textBox = new TextBox { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextWrapping = isComplex ? Avalonia.Media.TextWrapping.Wrap : Avalonia.Media.TextWrapping.NoWrap };
+                            textBox.Bind(TextBox.TextProperty, new Binding($"[{capturedProp.Name}]") { UpdateSourceTrigger = UpdateSourceTrigger.LostFocus, Mode = BindingMode.OneWay });
+                            if (capturedTypeName is "Int32" or "Int64" or "Double")
+                            {
+                                textBox.AddHandler(InputElement.TextInputEvent, (object? s, TextInputEventArgs ev) =>
+                                {
+                                    if (ev.Text == null) return;
+                                    var tb = (TextBox)s!;
+                                    foreach (char c in ev.Text)
+                                    {
+                                        bool ok = capturedTypeName switch
+                                        {
+                                            "Int32" or "Int64" => char.IsDigit(c) || (c == '-' && (tb.Text?.Length == 0 || tb.SelectionStart == 0)),
+                                            "Double" => char.IsDigit(c) || (c == '-' && (tb.Text?.Length == 0 || tb.SelectionStart == 0)) || (c == '.' && tb.Text?.Contains('.') != true),
+                                            _ => true
+                                        };
+                                        if (!ok) { ev.Handled = true; return; }
+                                    }
+                                }, RoutingStrategies.Tunnel);
+                            }
+
+                            return textBox;
+                        }, true);
+                        column.CellEditingTemplate = editingTemplate;
+                    }
+                    MainDataGrid.Columns.Add(column);
+                }
+
+                // 恢复数据源
+                MainDataGrid.ItemsSource = oldItemsSource;
+                Console.WriteLine($"[UI] Finished rebuilding columns for: {schemaData.TargetName}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error] OnSchemaLoaded UI update failed: {ex.Message}");
+            }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// 点击 DataGrid 表头或空白处时提交当前行编辑并清除选中，
+    /// 让复杂类型列的 ✏ 按钮始终可点击。
+    /// </summary>
+    private void OnDataGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // 若点击目标不是 DataGridCell / DataGridRow，则视为点击了空白区域
+        var control = e.Source as Avalonia.Controls.Control;
+        if (control == null) return;
+
+        // 检查是否点中了行内的任意单元格元素
+        bool hitRow = false;
+        var current = control as Avalonia.Visual;
+        while (current != null)
+        {
+            if (current is DataGridCell or DataGridRow)
+            {
+                hitRow = true;
+                break;
+            }
+            current = current.Parent as Avalonia.Visual;
+        }
+
+        if (!hitRow)
+        {
+            // 点击了表头/空白区域：提交编辑并取消选中
+            MainDataGrid.CommitEdit();
+            MainDataGrid.SelectedItem = null;
+        }
+    }
+
+    /// <summary>
+    /// 当用户开始编辑单元格时，清除旧的全局错误提示
+    /// </summary>
+    private void OnDataGridBeginningEdit(object? sender, DataGridBeginningEditEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.ClearGridError();
+            // 如果需要，也可以在此处清除行内错误，让红框消失
+            if (e.Row.DataContext is BsonDocumentWrapper wrapper)
+            {
+                // wrapper.ClearAllErrors(); // 暂时不自动清除红框，直到用户输入（由 Wrapper 内部 Item 变更逻辑处理更细致）
+            }
+        }
+    }
+
+    /// <summary>
+    /// 当用户直接在 DataGrid 单元格编辑结束时触发。
+    /// 用于拦截 _id 列的修改并进行唯一性校验。
+    /// </summary>
+    private void OnDataGridCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        // 仅处理提交动作（而非取消）
+        if (e.EditAction != DataGridEditAction.Commit) return;
+
+        // 通过 Tag 获取当前列绑定的字段名
+        var propName = e.Column.Tag?.ToString();
+        if (string.IsNullOrEmpty(propName)) return;
+
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null) return;
+
+        // 提取输入框中的新字符串值
+        if (e.EditingElement is TextBox textBox)
+        {
+            var wrapper = e.Row.DataContext as BsonDocumentWrapper;
+            if (wrapper != null)
+            {
+                var newText = textBox.Text;
+                var oldText = wrapper[propName];
+
+                // 如果值没变，直接返回
+                if (string.Equals(newText, oldText)) return;
+
+                // --- 特殊校验：ID 字段 ---
+                if (propName == "_id")
+                {
+                    var newVal = wrapper.ConvertToBsonValue(newText, wrapper.GetRawValue("_id").Type);
+
+                    // 1. 校验非空
+                    if (newVal.IsNull || (newVal.IsString && string.IsNullOrWhiteSpace(newVal.AsString)))
+                    {
+                        e.Cancel = true;
+                        textBox.Text = oldText; // 强制 UI 复位
+
+                        // wrapper.SetError(propName, "ID 不能为空。"); // 移除网格行内错误
+                        vm.GridErrorMessage = "修改失败：ID 不能为空。";
+                        return;
+                    }
+
+                    // 2. 校验唯一性
+                    if (vm.IsIdDuplicate(newVal, wrapper))
+                    {
+                        e.Cancel = true;
+                        textBox.Text = oldText; // 强制 UI 复位
+
+                        // wrapper.SetError(propName, $"ID '{newVal}' 已存在。"); // 移除网格行内错误
+                        vm.GridErrorMessage = $"修改失败：ID '{newVal}' 冲突。";
+                        return;
+                    }
+
+                    // 校验并写入模型
+                    // wrapper.ClearAllErrors(); // 移除网格行内错误清除
+                    vm.ClearGridError();
+                    wrapper[propName] = newText;
+                }
+                else
+                {
+                    // 非 ID 字段，直接手动写入模型（因为绑定是 OneWay）
+                    wrapper.ClearAllErrors();
+                    vm.ClearGridError();
+                    wrapper[propName] = newText;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 根据字段类型打开对应的集合编辑弹窗（Array / Dictionary / Document）。
+    /// 编辑的是 wrapper 内 BsonArray / BsonDocument 的就地引用，并在变动时刷新显示。
+    /// </summary>
+    private async Task<bool> OpenComplexFieldEditorAsync(BsonDocumentWrapper wrapper, SchemaProperty prop)
+    {
+        // 重要：必须进行深克隆，否则“就地修改”引用会导致模型追踪认为值没变（引用一致）
+        // 且会导致“撤销修改”功能失效，因为原始文档已经被改了。
+        var rawVal = wrapper.GetRawValue(prop.Name);
+        var clonedVal = DeepCloneBsonValue(rawVal);
+
+        var colVm = new CollectionEditorViewModel();
+        bool changed = false;
+        BsonValue? finalVal = null;
+
+        if (prop.TypeName == "Array")
+        {
+            var arr = clonedVal.IsArray ? clonedVal.AsArray : new BsonArray();
+            var rowId = wrapper.GetRawValue("_id");
+            var path = $"Row[{rowId}] > {prop.DisplayName}";
+            colVm.InitializeAsArray(arr, prop, path);
+            var win = new CollectionEditorWindow { DataContext = colVm };
+            await win.ShowDialog(this);
+            changed = colVm.IsChanged;
+            finalVal = arr;
+        }
+        else if (prop.TypeName == "Dictionary")
+        {
+            var dict = clonedVal.IsDocument ? clonedVal.AsDocument : new BsonDocument();
+            var rowId = wrapper.GetRawValue("_id");
+            var path = $"Row[{rowId}] > {prop.DisplayName}";
+            colVm.InitializeAsDictionary(dict, prop, path);
+            var win = new CollectionEditorWindow { DataContext = colVm };
+            await win.ShowDialog(this);
+            changed = colVm.IsChanged;
+            finalVal = dict;
+        }
+        else // Document / 嵌套类
+        {
+            var doc = clonedVal.IsDocument ? clonedVal.AsDocument : new BsonDocument();
+            if (prop.NestedProperties?.Count > 0)
+            {
+                var subData = new SchemaData { TargetName = prop.DisplayName, Properties = prop.NestedProperties };
+                var subVm = new DynamicPropertiesViewModel();
+                var rowId = wrapper.GetRawValue("_id");
+                var path = $"Row[{rowId}] > {prop.DisplayName}";
+                subVm.LoadDocumentMetadata(doc, subData, (_) =>
+                {
+                    changed = true;
+                    return Task.FromResult(true);
+                }, path);
+                await new DynamicPropertiesWindow { DataContext = subVm }.ShowDialog(this);
+                finalVal = doc;
+            }
+            else
+            {
+                var rowId = wrapper.GetRawValue("_id");
+                var path = $"Row[{rowId}] > {prop.DisplayName}";
+                colVm.InitializeAsDocument(doc, prop, path);
+                var win = new CollectionEditorWindow { DataContext = colVm };
+                await win.ShowDialog(this);
+                changed = colVm.IsChanged;
+                finalVal = doc;
+            }
+        }
+
+        if (changed && finalVal != null)
+        {
+            // 通过 BsonValue 直接写入待存列表，由 wrapper 判定是否真的与最初不同
+            wrapper.SetRawValueAndNotify(prop.Name, finalVal);
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => wrapper.RefreshAll(),
+                Avalonia.Threading.DispatcherPriority.Render);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// 对 BsonValue 进行深克隆（主要针对 Array 和 Document）。
+    /// </summary>
+    private BsonValue DeepCloneBsonValue(BsonValue val)
+    {
+        if (val.IsDocument || val.IsArray)
+        {
+            var json = LiteDB.JsonSerializer.Serialize(val);
+            return LiteDB.JsonSerializer.Deserialize(json);
+        }
+        return val; // 基础类型通常是不可变或值等效的
+    }
+
+    #endregion
+
+    #region 数据库操作
+
+    private async void OnOpenDatabaseClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null) return;
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null) return;
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "打开 LiteDB 数据库",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("LiteDB Files") { Patterns = new[] { "*.db" } },
+                new FilePickerFileType("All Files")    { Patterns = new[] { "*.*" } }
+            }
+        });
+
+        if (files.Count >= 1)
+        {
+            var path = files[0].TryGetLocalPath();
+            if (path != null) vm.OpenDatabase(path);
+        }
+    }
+
+    private async void OnNewDatabaseClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null) return;
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null) return;
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "新建 LiteDB 数据库",
+            DefaultExtension = "db",
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("LiteDB Files") { Patterns = new[] { "*.db" } }
+            }
+        });
+
+        if (file != null)
+        {
+            var path = file.TryGetLocalPath();
+            if (path != null) vm.OpenDatabase(path);
+        }
+    }
+
+    #endregion
+
+    #region 文档编辑弹窗
+
+    private async void OnEditDocumentClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        if (button.DataContext is not BsonDocumentWrapper wrapper) return;
+
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null || string.IsNullOrEmpty(vm.SelectedCollection)) return;
+
+        var parser = new SchemaParserService();
+        var schema = vm.CurrentSchema ?? parser.ParseFromBsonDocument(vm.SelectedCollection, wrapper.Document);
+
+        // 使用 GetMergedDocument 确保 _pendingChanges 里最新的数据也被包含在克隆中
+        var clonedBson = LiteDB.JsonSerializer
+            .Deserialize(LiteDB.JsonSerializer.Serialize(wrapper.GetMergedDocument()))
+            .AsDocument;
+
+        var dialogVm = new DynamicPropertiesViewModel();
+        var originalId = wrapper.GetRawValue("_id"); // 记录原始 ID 用于回滚
+
+        dialogVm.LoadDocumentMetadata(clonedBson, schema, (updatedBson) =>
+        {
+            // 1. 校验 ID 非空
+            var newId = updatedBson["_id"];
+            if (newId.IsNull || (newId.IsString && string.IsNullOrWhiteSpace(newId.AsString)))
+            {
+                // 设置内联错误
+                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
+                if (idVm != null)
+                {
+                    // 先还原值，再设错误信息
+                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
+                    idVm.ErrorMessage = "ID 不能为空。";
+                }
+                dialogVm.WindowErrorMessage = "保存失败：ID 不能为空。";
+                return Task.FromResult(false);
+            }
+
+            // 2. 校验 ID 唯一性（编辑模式，查重时排除掉自己当前这一行）
+            if (vm.IsIdDuplicate(newId, wrapper))
+            {
+                // 设置内联错误
+                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
+                if (idVm != null)
+                {
+                    // 先还原值，再设错误信息
+                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
+                    idVm.ErrorMessage = $"ID '{newId}' 已存在。";
+                }
+                dialogVm.WindowErrorMessage = $"保存失败：ID '{newId}' 已存在于当前列表中。";
+                return Task.FromResult(false);
+            }
+
+            // 2. 将修改后的各字段逐一写回 wrapper
+            foreach (var kvp in updatedBson)
+            {
+                // 使用 SetRawValueAndNotify 直接写入 BsonValue，避免中间字符串转换
+                wrapper.SetRawValueAndNotify(kvp.Key, kvp.Value);
+            }
+            return Task.FromResult(true);
+        }, $"Row[{originalId}]");
+
+        await new DynamicPropertiesWindow { DataContext = dialogVm }.ShowDialog(this);
+        // 保存回调已在 OnSaveClick 里执行，显式刷新整行数据
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => wrapper.RefreshAll(),
+            Avalonia.Threading.DispatcherPriority.Render);
+    }
+
+    private async void OnDeleteDocumentClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        if (button.DataContext is not BsonDocumentWrapper wrapper) return;
+
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null) return;
+
+        var id = wrapper.GetRawValue("_id");
+        bool confirm = await ConfirmWindow.Show(this, "确认删除", $"确定要删除 ID 为 '{id}' 的记录吗？\n(删除将在点击主界面[保存]按钮后正式生效)");
+
+        if (confirm)
+        {
+            vm.MarkDocumentForDeletion(wrapper);
+        }
+    }
+
+    #endregion
+
+    #region 模板绑定、新建文档、Collection 管理
+
+    private async void OnBindSchemaClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null || string.IsNullOrEmpty(vm.SelectedCollection)) return;
+
+        // 自动加载当前表的模板原始文件（如果存在）
+        var dialog = new SchemaEditorWindow { DataContext = new SchemaEditorViewModel(vm.CurrentBoundCsFilePath) };
+        var result = await dialog.ShowDialog<SchemaEditorResult?>(this);
+
+        if (result != null && !string.IsNullOrWhiteSpace(result.FilePath))
+            vm.BindSchemaFile(result.FilePath);
+    }
+
+    private async void OnNewDocumentClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null || string.IsNullOrEmpty(vm.SelectedCollection) || vm.CurrentSchema == null) return;
+
+        var newBson = new BsonDocument();
+
+        // --- 智能确定新 ID 的类型与初始值 ---
+        var firstDoc = System.Linq.Enumerable.FirstOrDefault(vm.Documents);
+        var idVal = firstDoc?.Document["_id"];
+
+        if (idVal == null || idVal.IsObjectId)
+        {
+            newBson["_id"] = ObjectId.NewObjectId();
+        }
+        else if (idVal.IsInt32 || idVal.IsInt64)
+        {
+            // 对于数字 ID，尝试查找当前最大值并 +1
+            long maxId = 0;
+            foreach (var doc in vm.Documents)
+            {
+                var curId = doc.GetRawValue("_id");
+                if (curId.IsNumber) maxId = Math.Max(maxId, curId.AsInt64);
+            }
+            newBson["_id"] = (int)(maxId + 1);
+        }
+        else
+        {
+            // 字符串或其他类型，默认给个空
+            newBson["_id"] = "";
+        }
+
+        var originalId = newBson["_id"]; // 记录初始生成的 ID 用于回滚
+
+        var dialogVm = new DynamicPropertiesViewModel();
+        dialogVm.LoadDocumentMetadata(newBson, vm.CurrentSchema, (updatedBson) =>
+        {
+            // 1. 校验 ID 非空
+            var newId = updatedBson["_id"];
+            if (newId.IsNull || (newId.IsString && string.IsNullOrWhiteSpace(newId.AsString)))
+            {
+                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
+                if (idVm != null)
+                {
+                    // 先还原值，再设错误信息。否则 OnValueChanged 会把 ErrorMessage 刷掉
+                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
+                    idVm.ErrorMessage = "ID 不能为空。";
+                }
+                dialogVm.WindowErrorMessage = "保存失败：ID 字段不能为空。";
+                return Task.FromResult(false);
+            }
+
+            // 2. 校验 ID 唯一性
+            if (vm.IsIdDuplicate(newId))
+            {
+                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
+                if (idVm != null)
+                {
+                    // 先还原值，再设错误信息
+                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
+                    idVm.ErrorMessage = $"ID '{newId}' 已存在。";
+                }
+                dialogVm.WindowErrorMessage = $"保存失败：ID '{newId}' 已存在于当前列表中。";
+                return Task.FromResult(false);
+            }
+
+            // 2. 正常加入列表
+            var newWrapper = new BsonDocumentWrapper(new BsonDocument(), w => vm.ForceSaveDocument(w));
+            vm.Documents.Add(newWrapper);
+
+            foreach (var kvp in updatedBson)
+            {
+                newWrapper.SetRawValueAndNotify(kvp.Key, kvp.Value);
+            }
+
+            newWrapper.RefreshAll();
+            return Task.FromResult(true);
+        });
+
+        try
+        {
+            await new DynamicPropertiesWindow { DataContext = dialogVm }.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error] OnNewDocumentClick dialog failed: {ex.Message}");
+        }
+    }
+
+    private async void OnAddCollectionClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null || !vm.IsDatabaseLoaded) return;
+
+        var dialog = new SchemaEditorWindow { DataContext = new SchemaEditorViewModel() };
+        var result = await dialog.ShowDialog<SchemaEditorResult?>(this);
+
+        if (result != null && !string.IsNullOrWhiteSpace(result.ClassName))
+        {
+            // 使用生成的类名作为表名，以及生成的 cs 文件作为模板
+            vm.CreateCollection(result.ClassName, result.FilePath);
+        }
+    }
+
+    private async void OnDeleteSpecificCollectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not string collectionName) return;
+        var vm = DataContext as MainWindowViewModel;
+        if (vm == null) return;
+
+        bool confirm = await ConfirmWindow.Show(this, "物理删除确认", $"❗ 警告：由于该操作不可撤销，确定要物理删除数据库中的表格 [{collectionName}] 及其所有数据吗？");
+        if (confirm)
+        {
+            vm.DeleteSpecificCollectionCommand.Execute(collectionName);
+        }
+    }
+
+    #endregion
+}

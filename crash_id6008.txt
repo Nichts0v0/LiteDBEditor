@@ -1,0 +1,12 @@
+﻿
+
+TimeCreated  : 2026-03-11 00:30:
+               58
+ProviderName : EventLog
+Id           : 6008
+Message      : 上一次系统的 0:26:43 在 
+               ‎2026/‎3/‎11 上的关闭
+               是意外的。
+
+
+
