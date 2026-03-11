@@ -46,6 +46,8 @@
  **修改数据**
  ![操作演示](./screenshots/change_data.gif) 
 
+ ---
+
 ## 如何使用 (Quick Start)
 
 1.  前往👉 [Releases](https://github.com/Nichts0v0/LiteDBEidtor/releases) 页面。
@@ -74,5 +76,8 @@
 ---
 
 <div align="center">
-  Made with ❤️ by <b>Nichts Studio</b>
+  Made with ❤️ by <b>Nichts Studio</b>💪 & 一大堆AI🙈
+</div>
+<div align="right">
+<sub>ps:和AI打架💪也好累啊。</sub> 
 </div>
