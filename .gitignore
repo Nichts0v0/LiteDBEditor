@@ -29,6 +29,7 @@ packages/
 *.pfx
 *.publishsettings
 *.log
+*.txt
 *.tmp
 
 ## [Avalonia Specific]
