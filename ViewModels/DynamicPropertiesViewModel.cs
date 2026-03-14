@@ -96,6 +96,18 @@ public partial class DynamicPropertiesViewModel : ViewModelBase
     /// </summary>
     public async Task<bool> ExecuteSaveAsync()
     {
+        ClearErrors();
+        
+        // 执行递归校验
+        foreach (var prop in Properties)
+        {
+            if (!prop.Validate(out string? error))
+            {
+                WindowErrorMessage = $"保存失败：字段 '{prop.DisplayName}' 或其子项存在错误：{error}";
+                return false;
+            }
+        }
+
         if (_targetBsonDocument != null && _onSaveAsync != null)
         {
             return await _onSaveAsync.Invoke(_targetBsonDocument);

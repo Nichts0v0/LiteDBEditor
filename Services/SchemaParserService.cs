@@ -332,7 +332,8 @@ public class SchemaParserService
             }
             else if (baseType == "Dictionary" || baseType == "IDictionary")
             {
-                p.TypeName = "Dictionary"; // 专用类型名以区分普通 Document
+                p.TypeName = "Dictionary"; 
+                p.CSharpTypeName = baseType;
                 if (genericName.TypeArgumentList.Arguments.Skip(1).FirstOrDefault() is TypeSyntax valTypeArg)
                 {
                     // Value 的类型 Schema
@@ -347,6 +348,7 @@ public class SchemaParserService
         else if (typeSyntax is ArrayTypeSyntax arrayType)
         {
             p.TypeName = "Array";
+            p.CSharpTypeName = arrayType.ElementType.ToString() + "[]";
             p.ElementSchema = CreateSchemaPropertyFromType("Item", arrayType.ElementType, allClasses, processedClasses);
         }
         else if (typeSyntax is NullableTypeSyntax nullableType)
@@ -357,6 +359,7 @@ public class SchemaParserService
         else if (typeSyntax is PredefinedTypeSyntax predefined)
         {
             p.TypeName = MapCSharpTypeToFriendlyString(predefined.Keyword.Text);
+            p.CSharpTypeName = predefined.Keyword.Text;
         }
         else if (typeSyntax is IdentifierNameSyntax identifier)
         {
@@ -371,6 +374,7 @@ public class SchemaParserService
             {
                 // 自己定义的模型嵌套类，去找整个树里有没有对应 class 声明
                 p.TypeName = "Document";
+                p.CSharpTypeName = typeName;
                 var nestedClass = allClasses
                     .FirstOrDefault(c => c.Identifier.Text == typeName);
 

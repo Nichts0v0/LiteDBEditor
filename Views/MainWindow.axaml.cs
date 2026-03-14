@@ -20,6 +20,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        
+        // 终极确认方案：使用 Tunnel 策略。此事件会在按钮响应点击前优先触发。
+        // handledEventsToo: true 确保即使点击在按钮或滚动条上，我们的逻辑也能执行。
+        this.AddHandler(PointerPressedEvent, OnGlobalPointerPressed, RoutingStrategies.Tunnel, true);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -63,7 +67,7 @@ public partial class MainWindow : Window
 
                     var column = new DataGridTemplateColumn
                     {
-                        Header = $"{prop.DisplayName} ({prop.TypeName})",
+                        Header = $"{prop.DisplayName} ({prop.GetFriendlyTypeString()})",
                         Tag = prop.Name,
                         IsReadOnly = isReadOnly,
                         CanUserSort = !isComplex,
@@ -197,6 +201,47 @@ public partial class MainWindow : Window
             // 点击了表头/空白区域：提交编辑并取消选中
             MainDataGrid.CommitEdit();
             MainDataGrid.SelectedItem = null;
+        }
+    }
+
+    /// <summary>
+    /// 全局点击处理（Tunnel 策略）：当点击非当前编辑区域时，强制提交 Grid 更改。
+    /// </summary>
+    private void OnGlobalPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // 如果 DataGrid 不在编辑状态，无需处理
+        // 注意：Avalonia DataGrid 并未直接暴露 IsEditing，我们通过检查 EditingElement
+        // 这里通过视觉树检查点击源是非常鲁棒的。
+        
+        var control = e.Source as Avalonia.Controls.Control;
+        if (control == null) return;
+
+        // 1. 检查点击源是否是 DataGrid 的内部组成部分
+        bool hitGrid = false;
+        var current = control as Avalonia.Visual;
+        while (current != null)
+        {
+            if (current == MainDataGrid)
+            {
+                hitGrid = true;
+                break;
+            }
+            current = current.Parent as Avalonia.Visual;
+        }
+
+        if (!hitGrid)
+        {
+            // 点击了外部（侧边栏、按钮等）：执行提交（由于是 Tunnel，会在按钮 Click 前完成）
+            MainDataGrid.CommitEdit();
+            this.Focus();
+        }
+        else
+        {
+            // 点击在 Grid 内部。
+            // 如果用户点击的是非当行/非当前单元格，也要提交旧的。
+            // DataGrid 本身会处理“点击另一行即切换”，但为了保险，
+            // 我们可以额外判断：如果点中的不是正在 Editing 的元素，就 Commit 一次。
+            // (通常 DataGrid 自带的逻辑已经足够，此处保持简单)
         }
     }
 
