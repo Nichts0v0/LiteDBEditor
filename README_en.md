@@ -3,7 +3,7 @@
 [简体中文](README.md) | [English](README_en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](https://github.com/Nichts0v0/LiteDBEidtor/releases)
+[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](https://github.com/Nichts0v0/LiteDBEditor/releases)
 
 A lightweight, responsive LiteDB database visualization management tool built with **Avalonia 11** and **.NET 9**.
 
@@ -52,7 +52,7 @@ A lightweight, responsive LiteDB database visualization management tool built wi
 
 ## How to Use (Quick Start)
 
-1.  Go to the 👉 [Releases](https://github.com/Nichts0v0/LiteDBEidtor/releases) page.
+1.  Go to the 👉 [Releases](https://github.com/Nichts0v0/LiteDBEditor/releases) page.
 2.  Download the latest version of `LiteDBEditor` for your system <sub>(though there's probably only one version anyway)</sub>.
 3.  Click "Open Database" to select or create a `.db` file.
 4.  Follow the guide in the UI preview and do whatever you want 🤪.

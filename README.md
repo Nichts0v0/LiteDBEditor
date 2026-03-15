@@ -3,7 +3,7 @@
 [简体中文](README.md) | [English](README_en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](https://github.com/Nichts0v0/LiteDBEidtor/releases)
+[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](https://github.com/Nichts0v0/LiteDBEditor/releases)
 
 一个基于 **Avalonia 11** 和 **.NET 9** 构建的轻量级、响应式 LiteDB 数据库可视化管理工具。
 
@@ -52,7 +52,7 @@
 
 ## 如何使用 (Quick Start)
 
-1.  前往👉 [Releases](https://github.com/Nichts0v0/LiteDBEidtor/releases) 页面。
+1.  前往👉 [Releases](https://github.com/Nichts0v0/LiteDBEditor/releases) 页面。
 2.  根据你的系统，下载最新版的 `LiteDBEditor`<sub>，虽然很可能就只有一版</sub>。
 3.  点击“打开数据库”选择或者创建 `.db` 文件。
 4.  参考界面预览中的操作，为所欲为🤪。
