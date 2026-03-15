@@ -39,6 +39,14 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
     /// </summary>
     public SchemaProperty? PropertySchema { get; private set; }
 
+    /// <summary>
+    /// 查重回调支持：(key, bsonValue) => 是否冲突
+    /// </summary>
+    public Func<string, BsonValue, bool>? IdDuplicateCheckFunc { get; set; }
+
+    private string? _originalKey;
+    private object? _originalValue;
+
     #endregion
 
     #region 复杂类型支持 (递归)
@@ -102,15 +110,17 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
     {
         _parentDocument = parent;
         _documentKey = key;
+        _originalKey = key;
         PropertySchema = schema;
         _onRemoveRequested = onRemove;
 
         PropertyName = schema.Name;
-        DisplayName = schema.DisplayName; // 去掉类型显示，让 UI 更整洁，类型由图标或预览显示
+        DisplayName = schema.DisplayName; 
         TypeName = schema.TypeName;
         IsRequired = schema.IsRequired;
 
         var bsonVal = parent.TryGetValue(key, out var val) ? val : BsonValue.Null;
+        _originalValue = bsonVal.RawValue;
         UpdateVisibilityAndValue(schema, bsonVal);
     }
 
@@ -126,6 +136,7 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
         TypeName = schema.TypeName;
 
         var bsonVal = index < parent.Count ? parent[index] : BsonValue.Null;
+        _originalValue = bsonVal.RawValue;
         UpdateVisibilityAndValue(schema, bsonVal);
     }
 
@@ -144,38 +155,64 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
         TypeName = valueSchema.TypeName;
 
         var bsonVal = parent.TryGetValue(key, out var val) ? val : BsonValue.Null;
+        _originalValue = bsonVal.RawValue;
         UpdateVisibilityAndValue(valueSchema, bsonVal);
     }
 
     partial void OnValueChanged(object? value)
     {
         ErrorMessage = null;
+        
+        // 实时校验：针对 _id 字段
+        if (PropertyName == "_id")
+        {
+            var strVal = value?.ToString();
+            if (string.IsNullOrWhiteSpace(strVal))
+            {
+                ErrorMessage = "ID 不能为空";
+            }
+            else if (IdDuplicateCheckFunc != null)
+            {
+                var bsonVal = ConvertToBsonValue(value, TypeName);
+                if (IdDuplicateCheckFunc.Invoke("_id", bsonVal))
+                {
+                    ErrorMessage = $"ID '{strVal}' 重复";
+                }
+            }
+        }
+
         WriteValueToBackingStore();
     }
 
     partial void OnDictItemKeyChanged(string? value)
     {
-        ErrorMessage = null;
-        if (!IsDictionaryItem || _parentDocument == null || _documentKey == null || value == null) return;
-        
-        // 执行实时校验
-        Validate(out string? error);
-        ErrorMessage = error;
-        
+        if (!IsDictionaryItem || _parentDocument == null || _documentKey == null) return;
+
+        // 重要：如果新值等于当前正式生效的 Key (可能是由于验证失败触发的回退)，则不清除错误信息也不执行后续逻辑
         if (value == _documentKey) return;
 
-        // 字典键变更：移动物理位置
-        if (string.IsNullOrWhiteSpace(value)) return;
+        ErrorMessage = null;
         
-        // 只有校验通过（无重名）才进行物理移动，否则只报错不移动底层数据
-        // 注意：Validate 内部目前只查重，不查自身，所以这里需要更细致一点
-        var collision = _parentDocument.Keys.Contains(value) && value != _documentKey;
-        if (collision)
+        // 1. 如果新值为空，直接报错并回退
+        if (string.IsNullOrWhiteSpace(value))
         {
-            ErrorMessage = $"Key '{value}' 已存在";
+            ErrorMessage = "键名不能为空";
+            // 强制将 UI 绑定的值回退为底层存储的旧 Key
+            DictItemKey = _documentKey; 
             return;
         }
 
+        // 2. 检查冲突
+        var collision = _parentDocument.Keys.Contains(value);
+        if (collision)
+        {
+            ErrorMessage = $"键名 '{value}' 已存在";
+            // 强制将 UI 绑定的值回退
+            DictItemKey = _documentKey;
+            return;
+        }
+
+        // 3. 校验通过，执行物理移动
         var currentVal = _parentDocument[_documentKey];
         _parentDocument.Remove(_documentKey);
         _parentDocument[value] = currentVal;
@@ -419,31 +456,32 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
     public bool Validate(out string? error)
     {
         error = null;
+
+        // 优先检查已有的实时错误
+        if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            error = ErrorMessage;
+            return false;
+        }
+
         if (IsDictionaryItem)
         {
             if (string.IsNullOrWhiteSpace(DictItemKey))
             {
-                error = "Key 不能为空";
+                ErrorMessage = "Key 不能为空";
+                error = ErrorMessage;
                 return false;
             }
-
-            // 查重：在同级的 Children 中查
-            // 我们需要获取父项的 Children。但是我们没有直接存 ParentViewModel 引用。
-            // 我们可以通过搜索当前类的一个递归校验来实现，或者让父项负责校验。
-            // 这里的实时校验逻辑：如果该项在父级的 Children 里有重复的 Key 就不行。
-            // 虽然没有 parent 引用，但可以在 Initialize 时通过 lambda 注入或在 Validate 时传入。
-            // 简单的做法是：在父项的 AddChild 或 Validate 时全局查一遍。
         }
 
         foreach (var child in Children)
         {
             if (!child.Validate(out error))
             {
-                IsExpanded = true; // 自动展开有错误的项
+                IsExpanded = true;
                 return false;
             }
             
-            // 如果是字典，检查子项 Key 是否互相冲突
             if (TypeName == "Dictionary")
             {
                 var keys = Children.Where(c => c != child && !string.IsNullOrEmpty(c.DictItemKey)).Select(c => c.DictItemKey);
@@ -459,7 +497,54 @@ public partial class DynamicPropertyItemViewModel : ViewModelBase
 
         return true;
     }
-    
+
+    /// <summary>
+    /// 递归收集当前项及其子项的所有错误字段名称，并返回第一个错误项 VM 供滚动焦点
+    /// </summary>
+    public DynamicPropertyItemViewModel? CollectAllErrors(System.Collections.Generic.List<string> errorDisplayNames)
+    {
+        // 触发当前的同步验证（补漏）
+        Validate(out _);
+
+        DynamicPropertyItemViewModel? firstErrorVm = null;
+
+        if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            // 如果是字典项，我们不直接在页脚显示那个随机/重复的 Key 字符串，而是让父级 Dictionary 报告变量名
+            if (!IsDictionaryItem)
+            {
+                string name = string.IsNullOrEmpty(DisplayName) ? PropertyName : DisplayName;
+                if (!errorDisplayNames.Contains(name))
+                {
+                    errorDisplayNames.Add(name);
+                }
+            }
+            firstErrorVm = this;
+        }
+
+        foreach (var child in Children)
+        {
+            var childErrorVm = child.CollectAllErrors(errorDisplayNames);
+            if (childErrorVm != null)
+            {
+                if (firstErrorVm == null) firstErrorVm = childErrorVm;
+
+                // 如果当前项是 Dictionary / Array 容器且有子项报错，将容器的名字加入报错列表
+                if (TypeName == "Dictionary" || TypeName == "Array")
+                {
+                    string containerName = string.IsNullOrEmpty(DisplayName) ? PropertyName : DisplayName;
+                    if (!errorDisplayNames.Contains(containerName))
+                    {
+                        errorDisplayNames.Add(containerName);
+                    }
+                }
+            }
+        }
+
+        if (firstErrorVm != null) IsExpanded = true;
+        return firstErrorVm;
+    }
+
     // 增加一个无参版本方便调用
     public bool Validate() => Validate(out _);
 

@@ -7,6 +7,7 @@
     mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
     x:Class="LiteDBEditor.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
+    x:Name="Root"
     Icon="/Assets/ldbe-256.ico"
     Title="{Binding WindowTitle}">
 
@@ -98,7 +99,7 @@
                         Click="OnOpenDatabaseClick">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <PathIcon Data="{StaticResource IconFolderOpen}" Width="16" Height="16" />
-                            <TextBlock Text="打开数据库..." />
+                            <TextBlock Text="{DynamicResource L_OpenDatabase}" />
                         </StackPanel>
                     </Button>
 
@@ -107,7 +108,7 @@
                         Click="OnNewDatabaseClick">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14" />
-                            <TextBlock Text="新建数据库..." />
+                            <TextBlock Text="{DynamicResource L_NewDatabase}" />
                         </StackPanel>
                     </Button>
 
@@ -115,17 +116,24 @@
 
                     <Grid ColumnDefinitions="*, Auto">
                         <TextBlock Grid.Column="0"
-                            Text="{Binding CurrentDbFileName, StringFormat='集合 ({0})', TargetNullValue='集合'}"
+                            Text="{Binding CurrentDbFileName, StringFormat='{}{0} '}"
                             FontSize="13"
                             FontWeight="SemiBold"
                             Foreground="{DynamicResource SemiColorText2}"
                             VerticalAlignment="Center"
                             TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="0"
+                            Text="{DynamicResource L_Collections}"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource SemiColorText2}"
+                            VerticalAlignment="Center" 
+                            IsVisible="{Binding CurrentDbFileName, Converter={x:Static conv:ObjectConverters.IsNull}}"/>
                         <Button Grid.Column="1"
                             Theme="{DynamicResource BorderlessButton}"
                             Width="28" Height="28" Padding="0"
                             Click="OnAddCollectionClick"
-                            ToolTip.Tip="新建集合"
+                            ToolTip.Tip="{DynamicResource L_NewCollection}"
                             IsEnabled="{Binding IsDatabaseLoaded}">
                             <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14" />
                         </Button>
@@ -154,7 +162,7 @@
                                     Foreground="{DynamicResource SemiColorDanger}"
                                     Width="24" Height="24" Padding="0"
                                     Click="OnDeleteSpecificCollectionClick"
-                                    ToolTip.Tip="删除此集合">
+                                    ToolTip.Tip="{DynamicResource L_DeleteCollectionTip}">
                                     <PathIcon Data="{StaticResource IconDelete}" Width="12"
                                         Height="12" />
                                 </Button>
@@ -163,9 +171,31 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <StackPanel Grid.Row="2" Margin="16" IsVisible="{Binding IsDatabaseLoaded}">
-                    <TextBlock Text="数据库已连接" FontSize="11"
+                <StackPanel Grid.Row="2" Margin="16">
+                    <TextBlock Text="{DynamicResource L_DatabaseConnected}" FontSize="11"
+                        IsVisible="{Binding IsDatabaseLoaded}"
                         Foreground="{DynamicResource SemiColorPrimary}" HorizontalAlignment="Center" />
+                    
+                    <Button Theme="{DynamicResource BorderlessButton}"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,8,0,0">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="TopEdgeAlignedLeft">
+                                <MenuItem Header="{DynamicResource L_Language}">
+                                    <MenuItem Header="简体中文" 
+                                              Command="{Binding ChangeLanguageCommand}" 
+                                              CommandParameter="zh-CN" />
+                                    <MenuItem Header="English" 
+                                              Command="{Binding ChangeLanguageCommand}" 
+                                              CommandParameter="en-US" />
+                                </MenuItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16" />
+                            <TextBlock Text="{DynamicResource L_Settings}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -182,7 +212,7 @@
                 IsVisible="{Binding SelectedCollection, Converter={x:Static conv:ObjectConverters.IsNull}}">
                 <PathIcon Data="{StaticResource IconDocument}" Width="48" Height="48"
                     Foreground="{DynamicResource SemiColorDisabledText}" />
-                <TextBlock Text="请选择一个集合以查看数据"
+                <TextBlock Text="{DynamicResource L_SelectCollectionTip}"
                     FontSize="16"
                     Foreground="{DynamicResource SemiColorText3}" />
             </StackPanel>
@@ -218,14 +248,14 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <PathIcon Data="{StaticResource IconLink}" Width="14"
                                         Height="14" />
-                                    <TextBlock Text="绑定模板" />
+                                    <TextBlock Text="{DynamicResource L_BindSchema}" />
                                 </StackPanel>
                             </Button>
                             <Button Theme="{DynamicResource LightButton}" Click="OnNewDocumentClick">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <PathIcon Data="{StaticResource IconPlus}" Width="14"
                                         Height="14" />
-                                    <TextBlock Text="新增记录" />
+                                    <TextBlock Text="{DynamicResource L_NewDocument}" />
                                 </StackPanel>
                             </Button>
 
@@ -239,7 +269,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <PathIcon Data="{StaticResource IconSave}" Width="14"
                                             Height="14" />
-                                        <TextBlock Text="保存修改" />
+                                        <TextBlock Text="{DynamicResource L_SaveChanges}" />
                                     </StackPanel>
                                 </Button>
                                 <Button Theme="{DynamicResource LightButton}" Classes="Danger"
@@ -247,13 +277,13 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <PathIcon Data="{StaticResource IconCancel}" Width="14"
                                             Height="14" />
-                                        <TextBlock Text="放弃" />
+                                        <TextBlock Text="{DynamicResource L_Cancel}" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
                         </StackPanel>
 
-                        <TextBlock Grid.Column="1" Text="⚠ 有未保存的更改"
+                        <TextBlock Grid.Column="1" Text="{DynamicResource L_UnsavedChanges}"
                             Foreground="{DynamicResource SemiColorWarning}"
                             VerticalAlignment="Center" FontWeight="SemiBold"
                             IsVisible="{Binding HasUnsavedChanges}" />
@@ -274,14 +304,15 @@
                     BeginningEdit="OnDataGridBeginningEdit"
                     CellEditEnding="OnDataGridCellEditEnding">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="操作" IsReadOnly="True" Width="Auto">
+                        <DataGridTemplateColumn Header="{DynamicResource L_Actions}" IsReadOnly="True" Width="Auto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="4"
                                         HorizontalAlignment="Left" Margin="12,4,4,4">
                                         <Button Theme="{DynamicResource BorderlessButton}"
-                                            Click="OnEditDocumentClick"
-                                            ToolTip.Tip="编辑 JSON">
+                                                Foreground="{DynamicResource SemiColorPrimary}"
+                                                ToolTip.Tip="{DynamicResource L_EditData}"
+                                                Click="OnEditDocumentClick">
                                             <PathIcon Data="{StaticResource IconEdit}" Width="14"
                                                 Height="14"
                                                 Foreground="{DynamicResource SemiColorText2}" />
@@ -289,7 +320,7 @@
                                         <Button Theme="{DynamicResource BorderlessButton}"
                                             Click="OnDeleteDocumentClick"
                                             Foreground="{DynamicResource SemiColorDanger}"
-                                            ToolTip.Tip="删除记录">
+                                            ToolTip.Tip="{DynamicResource L_DeleteRecord}">
                                             <PathIcon Data="{StaticResource IconDelete}" Width="14"
                                                 Height="14" />
                                         </Button>
@@ -318,7 +349,7 @@
                         Foreground="{DynamicResource SemiColorDanger}" Width="20" Height="20"
                         VerticalAlignment="Center" />
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="验证错误" FontSize="14" FontWeight="Bold"
+                        <TextBlock Text="{DynamicResource L_ValidationError}" FontSize="14" FontWeight="Bold"
                             Foreground="{DynamicResource SemiColorDanger}" />
                         <TextBlock Text="{Binding GridErrorMessage}"
                             Foreground="{DynamicResource SemiColorDanger}"

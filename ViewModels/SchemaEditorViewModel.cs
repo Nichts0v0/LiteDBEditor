@@ -127,7 +127,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"加载失败: {ex.Message}";
+            ErrorMessage = $"{LanguageService.GetString("L_LoadFailed")}: {ex.Message}";
         }
     }
 
@@ -202,7 +202,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"保存失败: {ex.Message}";
+            ErrorMessage = $"{LanguageService.GetString("L_SaveFailed")}: {ex.Message}";
             return null;
         }
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -19,6 +20,75 @@ public partial class DynamicPropertiesWindow : Window
         InitializeComponent();
     }
 
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (DataContext is DynamicPropertiesViewModel vm)
+        {
+            vm.RequestScrollToError -= OnRequestScrollToError;
+            vm.RequestScrollToError += OnRequestScrollToError;
+        }
+    }
+
+    private void OnRequestScrollToError(DynamicPropertyItemViewModel item)
+    {
+        // 延迟一小段时间确保 UI 已反映任何可能的状态变更（虽然此处通常是即时的）
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var itemsControl = this.FindControl<ItemsControl>("PropertiesItemsControl");
+            if (itemsControl == null) return;
+
+            // 在视觉树中查找 DataContext 等于该 item 的对应控件
+            foreach (var logicalChild in itemsControl.GetVisualChildren())
+            {
+                // ItemsControl 的直接视觉子项通常是 DataTemplate 渲染出来的容器
+                if (logicalChild is Avalonia.Controls.Control control && control.DataContext == item)
+                {
+                    control.BringIntoView();
+                    FocusFirstErrorInput(control);
+                    return;
+                }
+                
+                // 递归查找深度嵌套的情况（如果需要）
+                var found = FindControlByDataContext(logicalChild, item);
+                if (found != null)
+                {
+                    found.BringIntoView();
+                    FocusFirstErrorInput(found);
+                    return;
+                }
+            }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    private void FocusFirstErrorInput(Control control)
+    {
+        // 查找所有 TextBox 并 Focus 第一个可见且可能报错的
+        foreach (var visual in control.GetVisualDescendants())
+        {
+            if (visual is TextBox tb && tb.IsVisible && tb.IsEnabled && !tb.IsReadOnly)
+            {
+                tb.Focus();
+                tb.SelectionStart = 0;
+                tb.SelectionEnd = tb.Text?.Length ?? 0;
+                break; 
+            }
+        }
+    }
+
+    private Avalonia.Controls.Control? FindControlByDataContext(Avalonia.Visual parent, object dataContext)
+    {
+        foreach (var child in parent.GetVisualChildren())
+        {
+            if (child is Avalonia.Controls.Control control && control.DataContext == dataContext)
+                return control;
+            
+            var nested = FindControlByDataContext(child, dataContext);
+            if (nested != null) return nested;
+        }
+        return null;
+    }
+
     #endregion
 
     #region 保存与取消
@@ -27,8 +97,7 @@ public partial class DynamicPropertiesWindow : Window
     {
         if (DataContext is DynamicPropertiesViewModel vm)
         {
-            vm.ClearErrors();
-            // 执行保存回调（含查重校验），如果校验失败则不关闭窗口
+            // 执行保存回调（含系统化校验与回退），如果校验失败则不关闭窗口
             if (!await vm.ExecuteSaveAsync())
             {
                 return;
@@ -82,5 +151,4 @@ public partial class DynamicPropertiesWindow : Window
     }
 
     #endregion
-
 }

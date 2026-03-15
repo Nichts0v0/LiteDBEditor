@@ -3,14 +3,18 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using System.Linq;
+using System;
 using Avalonia.Markup.Xaml;
 using LiteDBEditor.ViewModels;
 using LiteDBEditor.Views;
+using LiteDBEditor.Services;
 
 namespace LiteDBEditor;
 
 public partial class App : Application
 {
+    public static LanguageService Language { get; } = new();
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -18,11 +22,13 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // 确保在主窗口创建并设置 DataContext 之前初始化语言资源
+        LanguageService.Initialize();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
-            // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
+            
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(),

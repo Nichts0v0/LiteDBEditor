@@ -350,43 +350,19 @@ public partial class MainWindow : Window
         var dialogVm = new DynamicPropertiesViewModel();
         var originalId = wrapper.GetRawValue("_id"); // 记录原始 ID 用于回滚
 
+        // 提供实时查重逻辑
+        dialogVm.GlobalIdDuplicateCheckFunc = (propName, bsonVal) => 
+        {
+            if (propName == "_id") return vm.IsIdDuplicate(bsonVal, wrapper);
+            return false;
+        };
+
         dialogVm.LoadDocumentMetadata(clonedBson, schema, (updatedBson) =>
         {
-            // 1. 校验 ID 非空
-            var newId = updatedBson["_id"];
-            if (newId.IsNull || (newId.IsString && string.IsNullOrWhiteSpace(newId.AsString)))
-            {
-                // 设置内联错误
-                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
-                if (idVm != null)
-                {
-                    // 先还原值，再设错误信息
-                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
-                    idVm.ErrorMessage = "ID 不能为空。";
-                }
-                dialogVm.WindowErrorMessage = "保存失败：ID 不能为空。";
-                return Task.FromResult(false);
-            }
-
-            // 2. 校验 ID 唯一性（编辑模式，查重时排除掉自己当前这一行）
-            if (vm.IsIdDuplicate(newId, wrapper))
-            {
-                // 设置内联错误
-                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
-                if (idVm != null)
-                {
-                    // 先还原值，再设错误信息
-                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
-                    idVm.ErrorMessage = $"ID '{newId}' 已存在。";
-                }
-                dialogVm.WindowErrorMessage = $"保存失败：ID '{newId}' 已存在于当前列表中。";
-                return Task.FromResult(false);
-            }
-
-            // 2. 将修改后的各字段逐一写回 wrapper
+            // 在此阶段，VM 已经通过其内部的 Validate 和回退逻辑保证了数据的业务合法性（非空、查重等）
+            // 我们只需要简单执行物理写回并返回 true 即可
             foreach (var kvp in updatedBson)
             {
-                // 使用 SetRawValueAndNotify 直接写入 BsonValue，避免中间字符串转换
                 wrapper.SetRawValueAndNotify(kvp.Key, kvp.Value);
             }
             return Task.FromResult(true);
@@ -468,38 +444,16 @@ public partial class MainWindow : Window
         var originalId = newBson["_id"]; // 记录初始生成的 ID 用于回滚
 
         var dialogVm = new DynamicPropertiesViewModel();
+        // 提供实时查重逻辑
+        dialogVm.GlobalIdDuplicateCheckFunc = (propName, bsonVal) => 
+        {
+            if (propName == "_id") return vm.IsIdDuplicate(bsonVal);
+            return false;
+        };
+
         dialogVm.LoadDocumentMetadata(newBson, vm.CurrentSchema, (updatedBson) =>
         {
-            // 1. 校验 ID 非空
-            var newId = updatedBson["_id"];
-            if (newId.IsNull || (newId.IsString && string.IsNullOrWhiteSpace(newId.AsString)))
-            {
-                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
-                if (idVm != null)
-                {
-                    // 先还原值，再设错误信息。否则 OnValueChanged 会把 ErrorMessage 刷掉
-                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
-                    idVm.ErrorMessage = "ID 不能为空。";
-                }
-                dialogVm.WindowErrorMessage = "保存失败：ID 字段不能为空。";
-                return Task.FromResult(false);
-            }
-
-            // 2. 校验 ID 唯一性
-            if (vm.IsIdDuplicate(newId))
-            {
-                var idVm = dialogVm.Properties.FirstOrDefault(p => p.PropertyName == "_id");
-                if (idVm != null)
-                {
-                    // 先还原值，再设错误信息
-                    idVm.Value = originalId.IsString ? originalId.AsString : originalId.RawValue?.ToString();
-                    idVm.ErrorMessage = $"ID '{newId}' 已存在。";
-                }
-                dialogVm.WindowErrorMessage = $"保存失败：ID '{newId}' 已存在于当前列表中。";
-                return Task.FromResult(false);
-            }
-
-            // 2. 正常加入列表
+            // 正常加入列表
             var newWrapper = new BsonDocumentWrapper(new BsonDocument(), w => vm.ForceSaveDocument(w));
             vm.Documents.Add(newWrapper);
 

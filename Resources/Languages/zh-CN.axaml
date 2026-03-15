@@ -1,0 +1,49 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <x:String x:Key="L_AppName">LiteDB Editor</x:String>
+    <x:String x:Key="L_OpenDatabase">打开数据库...</x:String>
+    <x:String x:Key="L_NewDatabase">新建数据库...</x:String>
+    <x:String x:Key="L_Collections">集合</x:String>
+    <x:String x:Key="L_NewCollection">新建集合</x:String>
+    <x:String x:Key="L_DeleteCollectionTip">删除此集合</x:String>
+    <x:String x:Key="L_DatabaseConnected">数据库已连接</x:String>
+    <x:String x:Key="L_SelectCollectionTip">请选择一个集合以查看数据</x:String>
+    <x:String x:Key="L_BindSchema">绑定模板</x:String>
+    <x:String x:Key="L_NewDocument">新增记录</x:String>
+    <x:String x:Key="L_SaveChanges">保存修改</x:String>
+    <x:String x:Key="L_Cancel">放弃</x:String>
+    <x:String x:Key="L_UnsavedChanges">⚠ 有未保存的更改</x:String>
+    <x:String x:Key="L_Actions">操作</x:String>
+    <x:String x:Key="L_EditData">编辑数据</x:String>
+    <x:String x:Key="L_DeleteRecord">删除记录</x:String>
+    <x:String x:Key="L_ValidationError">验证错误</x:String>
+    <x:String x:Key="L_Settings">设置</x:String>
+    <x:String x:Key="L_Language">语言</x:String>
+    <!-- Dynamic Properties Window -->
+    <x:String x:Key="L_EditDocument">编辑文档</x:String>
+    <x:String x:Key="L_KeyName">键名</x:String>
+    <x:String x:Key="L_AddSubItem">添加子项</x:String>
+    <x:String x:Key="L_ValidationErrorPrefix">以下项存在问题: </x:String>
+    
+    <!-- Schema Editor Window -->
+    <x:String x:Key="L_VisualSchemaEditor">可视化模板编辑器</x:String>
+    <x:String x:Key="L_SchemaManagement">模板架构管理</x:String>
+    <x:String x:Key="L_RootClass">主类 (Root Class)</x:String>
+    <x:String x:Key="L_InnerClasses">辅助内嵌类 (Inner Classes)</x:String>
+    <x:String x:Key="L_AddInnerClass">添加辅助类</x:String>
+    <x:String x:Key="L_UseExistingSchema">使用现有模板</x:String>
+    <x:String x:Key="L_LoadSelectedSchema">加载选中模板</x:String>
+    <x:String x:Key="L_BrowseFromFile">从文件浏览...</x:String>
+    <x:String x:Key="L_ConfiguringClass">正在配置类:</x:String>
+    <x:String x:Key="L_InvalidName">名称无效</x:String>
+    <x:String x:Key="L_FieldName">变量名</x:String>
+    <x:String x:Key="L_FieldType">类型</x:String>
+    <x:String x:Key="L_ListElementType">List 元素类型:</x:String>
+    <x:String x:Key="L_TargetClassName">➜ 对象类名:</x:String>
+    <x:String x:Key="L_SelectDefinedType">选择已定义类型:</x:String>
+    <x:String x:Key="L_AddFieldDefinition">添加变量定义</x:String>
+    <x:String x:Key="L_PreviewCSharp">预览 C# 代码</x:String>
+    <x:String x:Key="L_Save">保 存</x:String>
+    <x:String x:Key="L_LoadFailed">加载失败</x:String>
+    <x:String x:Key="L_SaveFailed">保存失败</x:String>
+</ResourceDictionary>

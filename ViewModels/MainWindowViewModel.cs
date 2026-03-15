@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -52,6 +53,20 @@ public partial class MainWindowViewModel : ViewModelBase
     private CancellationTokenSource? _errorCts;
 
     private readonly ObservableCollection<BsonDocumentWrapper> _pendingDeletions = new();
+
+    public Dictionary<string, string> AvailableLanguages => LanguageService.AvailableLanguages;
+
+    [RelayCommand]
+    private void ChangeLanguage(string locale)
+    {
+        if (locale != LanguageService.CurrentLanguage)
+        {
+            LanguageService.SetLanguage(locale);
+            OnPropertyChanged(nameof(SelectedLanguage));
+        }
+    }
+
+    public string SelectedLanguage => LanguageService.CurrentLanguage;
 
     public MainWindowViewModel()
     {
@@ -288,7 +303,14 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void CancelChanges()
     {
-        // 1. 还原已修改的数据
+        // 1. 还原并移除新增加的数据
+        var toRemove = Documents.Where(d => d.OriginalId == BsonValue.Null).ToList();
+        foreach (var newDoc in toRemove)
+        {
+            Documents.Remove(newDoc);
+        }
+
+        // 2. 还原已修改的数据
         foreach (var doc in Documents)
         {
             if (doc.IsModified)
@@ -297,10 +319,14 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         }
 
-        // 2. 还原被删除的数据（插回界面显示）
+        // 3. 还原被删除的数据（插回界面显示）
+        // 如果被删除的数据是原本就在数据库里的记录，则恢复；如果是“新增后又被点删除”的数据，则不做还原（因为它从未入库）
         foreach (var deleted in _pendingDeletions)
         {
-            Documents.Add(deleted);
+            if (deleted.OriginalId != BsonValue.Null)
+            {
+                Documents.Add(deleted);
+            }
         }
         _pendingDeletions.Clear();
 

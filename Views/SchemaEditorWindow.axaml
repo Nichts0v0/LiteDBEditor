@@ -5,7 +5,7 @@
     xmlns:conv="clr-namespace:LiteDBEditor.Converters;assembly=LiteDBEditor"
     x:Class="LiteDBEditor.Views.SchemaEditorWindow"
     x:DataType="vm:SchemaEditorViewModel"
-    Title="可视化模板编辑器"
+    Title="{DynamicResource L_VisualSchemaEditor}"
     Icon="/Assets/ldbe-256.ico"
     Width="1050" Height="700"
     WindowStartupLocation="CenterOwner">
@@ -31,11 +31,11 @@
             BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="0,0,1,0">
             <Grid RowDefinitions="Auto, *, Auto" Margin="16">
                 <StackPanel Grid.Row="0" Spacing="16" Margin="0,0,0,16">
-                    <TextBlock Text="模板架构管理" FontSize="18" FontWeight="Bold"
+                    <TextBlock Text="{DynamicResource L_SchemaManagement}" FontSize="18" FontWeight="Bold"
                         Foreground="{DynamicResource SemiColorText0}" />
 
                     <StackPanel Spacing="8">
-                        <TextBlock Text="主类 (Root Class)"
+                        <TextBlock Text="{DynamicResource L_RootClass}"
                             Foreground="{DynamicResource SemiColorText2}" FontSize="12"
                             FontWeight="SemiBold" />
                         <Button Theme="{DynamicResource LightButton}"
@@ -51,7 +51,7 @@
                     </StackPanel>
 
                     <Separator Background="{DynamicResource SemiColorBorder}" />
-                    <TextBlock Text="辅助内嵌类 (Inner Classes)"
+                        <TextBlock Text="{DynamicResource L_InnerClasses}"
                         Foreground="{DynamicResource SemiColorText2}" FontSize="12"
                         FontWeight="SemiBold" />
                 </StackPanel>
@@ -90,11 +90,11 @@
                         Command="{Binding AddInnerClassCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14" />
-                            <TextBlock Text="添加辅助类" />
+                            <TextBlock Text="{DynamicResource L_AddInnerClass}" />
                         </StackPanel>
                     </Button>
 
-                    <Expander Header="使用现有模板" IsExpanded="False"
+                    <Expander Header="{DynamicResource L_UseExistingSchema}" IsExpanded="False"
                         Theme="{DynamicResource SimpleExpander}">
                         <StackPanel Spacing="8" Margin="0,8,0,0">
                             <ListBox ItemsSource="{Binding ExistingSchemas}" MaxHeight="120"
@@ -106,10 +106,10 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                            <Button Theme="{DynamicResource LightButton}" Content="加载选中模板"
+                            <Button Theme="{DynamicResource LightButton}" Content="{DynamicResource L_LoadSelectedSchema}"
                                 HorizontalAlignment="Stretch" Click="OnUseExistingClick"
                                 FontSize="12" />
-                            <Button Theme="{DynamicResource BorderlessButton}" Content="从文件浏览..."
+                            <Button Theme="{DynamicResource BorderlessButton}" Content="{DynamicResource L_BrowseFromFile}"
                                 HorizontalAlignment="Stretch" Click="OnBrowseFileClick"
                                 FontSize="12" />
                         </StackPanel>
@@ -129,7 +129,7 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
                         <PathIcon Data="{StaticResource IconEdit}" Width="20" Height="20"
                             Foreground="{DynamicResource SemiColorPrimary}" />
-                        <TextBlock Text="正在配置类:" VerticalAlignment="Center" FontWeight="Bold"
+                        <TextBlock Text="{DynamicResource L_ConfiguringClass}" VerticalAlignment="Center" FontWeight="Bold"
                             FontSize="15" />
                     </StackPanel>
                     <TextBox Grid.Column="1" Text="{Binding CurrentEditingClass.ClassName}"
@@ -141,7 +141,7 @@
                     <Border Grid.Column="2" IsVisible="{Binding !CurrentEditingClass.IsValid}"
                         Background="{DynamicResource SemiColorDanger}" CornerRadius="12"
                         Padding="8,2">
-                        <TextBlock Text="名称无效" Foreground="White" FontSize="10" FontWeight="Bold" />
+                        <TextBlock Text="{DynamicResource L_InvalidName}" Foreground="White" FontSize="10" FontWeight="Bold" />
                     </Border>
                 </Grid>
             </Border>
@@ -166,7 +166,7 @@
                                                 ColumnSpacing="16">
                                                 <!-- Field Name -->
                                                 <StackPanel Spacing="4">
-                                                    <TextBlock Text="变量名" FontSize="11"
+                                                    <TextBlock Text="{DynamicResource L_FieldName}" FontSize="11"
                                                         Foreground="{DynamicResource SemiColorText2}"
                                                         FontWeight="SemiBold" />
                                                     <TextBox Text="{Binding FieldName}"
@@ -177,7 +177,7 @@
 
                                                 <!-- Field Type -->
                                                 <StackPanel Spacing="4" Grid.Column="1">
-                                                    <TextBlock Text="类型" FontSize="11"
+                                                    <TextBlock Text="{DynamicResource L_FieldType}" FontSize="11"
                                                         Foreground="{DynamicResource SemiColorText2}"
                                                         FontWeight="SemiBold" />
                                                     <ComboBox
@@ -208,7 +208,7 @@
                                                     <StackPanel Orientation="Horizontal"
                                                         Spacing="12"
                                                         IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.List}}">
-                                                        <TextBlock Text="List 元素类型:"
+                                                        <TextBlock Text="{DynamicResource L_ListElementType}"
                                                             VerticalAlignment="Center" FontSize="13"
                                                             FontWeight="SemiBold" />
                                                         <ComboBox
@@ -219,7 +219,7 @@
                                                         <StackPanel Orientation="Horizontal"
                                                             Spacing="8"
                                                             IsVisible="{Binding SubType, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
-                                                            <TextBlock Text="➜ 对象类名:"
+                                                            <TextBlock Text="{DynamicResource L_TargetClassName}"
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" />
                                                             <ComboBox
@@ -234,7 +234,7 @@
                                                         IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Dictionary}}">
                                                         <StackPanel Orientation="Horizontal"
                                                             Spacing="8" Margin="0,0,12,8">
-                                                            <TextBlock Text="Key:"
+                                                            <TextBlock Text="{DynamicResource L_KeyName}"
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" FontWeight="SemiBold" />
                                                             <ComboBox
@@ -261,7 +261,7 @@
                                                         <StackPanel Orientation="Horizontal"
                                                             Spacing="8" Margin="0,0,0,8"
                                                             IsVisible="{Binding SubType, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
-                                                            <TextBlock Text="➜ 对象类名:"
+                                                            <TextBlock Text="{DynamicResource L_TargetClassName}"
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" />
                                                             <ComboBox
@@ -275,7 +275,7 @@
                                                     <StackPanel Orientation="Horizontal"
                                                         Spacing="12"
                                                         IsVisible="{Binding Type, Converter={StaticResource EqualsConverter}, ConverterParameter={x:Static models:FieldType.Custom}}">
-                                                        <TextBlock Text="选择已定义类型:"
+                                                        <TextBlock Text="{DynamicResource L_SelectDefinedType}"
                                                             VerticalAlignment="Center" FontSize="13"
                                                             FontWeight="SemiBold" />
                                                         <ComboBox
@@ -302,7 +302,7 @@
                     Command="{Binding AddFieldCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14" />
-                        <TextBlock Text="添加变量定义" />
+                        <TextBlock Text="{DynamicResource L_AddFieldDefinition}" />
                     </StackPanel>
                 </Button>
 
@@ -312,11 +312,11 @@
                     FontWeight="Bold" />
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12">
-                    <Button Theme="{DynamicResource LightButton}" Content="预览 C# 代码"
+                    <Button Theme="{DynamicResource LightButton}" Content="{DynamicResource L_PreviewCSharp}"
                         IsVisible="False" /> <!-- Placeholder for future feature -->
-                    <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100"
+                    <Button Theme="{DynamicResource LightButton}" Content="{DynamicResource L_Cancel}" Width="100"
                         Click="OnCancelClick" />
-                    <Button Theme="{DynamicResource SolidButton}" Classes="Primary" Content="保 存"
+                    <Button Theme="{DynamicResource SolidButton}" Classes="Primary" Content="{DynamicResource L_Save}"
                         Width="120" Click="OnSaveClick" />
                 </StackPanel>
             </Grid>

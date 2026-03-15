@@ -11,7 +11,7 @@
         Title="{Binding Title}"
         Icon="/Assets/ldbe-256.ico"
         WindowStartupLocation="CenterOwner"
-        Width="500" Height="600">
+        Width="600" Height="700">
     <Window.Resources>
     </Window.Resources>
 
@@ -26,101 +26,129 @@
             <Setter Property="BorderBrush" Value="Red"/>
             <Setter Property="BorderThickness" Value="2"/>
         </Style>
+        
+        <!-- 属性条目容器 -->
+        <Style Selector="Border.PropertyItem">
+            <Setter Property="Background" Value="{DynamicResource SemiColorFill0}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.15"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.PropertyItem:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SemiColorFill1}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimaryLight}"/>
+        </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="Auto, *, Auto" Margin="20">
+    <Grid RowDefinitions="Auto, *, Auto" Margin="24">
         <!-- Header -->
-        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="18" FontWeight="Bold" Margin="0,0,0,16" Foreground="{DynamicResource SemiColorText0}"/>
+        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="20" FontWeight="Bold" Margin="0,0,0,20" Foreground="{DynamicResource SemiColorText0}"/>
 
         <ScrollViewer Grid.Row="1">
-            <ItemsControl ItemsSource="{Binding Properties}">
+            <ItemsControl x:Name="PropertiesItemsControl" ItemsSource="{Binding Properties}" Padding="0,0,16,0">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:DynamicPropertyItemViewModel">
-                        <StackPanel Margin="0,0,0,12">
+                        <StackPanel Margin="0,0,0,16">
                             <!-- Property Item Card -->
-                            <Border Background="{DynamicResource SemiColorFill0}" BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" CornerRadius="8" Padding="12">
-                                <StackPanel>
-                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto">
+                            <Border Classes="PropertyItem">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="Auto, *, 2*, Auto">
                                         <!-- Expand/Collapse Button for Complex Types -->
                                         <Button Grid.Column="0" Theme="{DynamicResource BorderlessButton}"
-                                                Width="24" Height="24" Padding="0"
+                                                Width="28" Height="28" Padding="0"
                                                 IsVisible="{Binding IsComplexEditorVisible}"
                                                 Command="{Binding ToggleExpandCommand}"
-                                                Margin="0,0,8,0">
+                                                Margin="0,0,10,0">
                                             <PathIcon Data="{Binding IsExpanded, Converter={x:Static conv:ObjectConverters.ExpandIconConverter}}" 
-                                                      Width="10" Height="10" />
+                                                      Width="12" Height="12" />
                                         </Button>
 
-                                        <!-- Display Name or Key Input -->
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                                        <!-- Prop Name & Type Display -->
+                                        <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
                                             <!-- Key Input for Dictionary Items -->
                                             <TextBox Text="{Binding DictItemKey, Mode=TwoWay}"
                                                      IsVisible="{Binding IsDictionaryItem}"
                                                      IsReadOnly="{Binding IsReadOnly}"
-                                                     Watermark="Key"
-                                                     MinWidth="120"
+                                                     Watermark="{DynamicResource L_KeyName}"
+                                                     FontSize="12"
                                                      Classes.error="{Binding ErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}" />
                                             
                                             <!-- Display Name for regular properties -->
                                             <TextBlock Text="{Binding DisplayName}" 
                                                        IsVisible="{Binding !IsDictionaryItem}"
-                                                       FontSize="13"
+                                                       FontSize="14"
                                                        FontWeight="SemiBold"
-                                                       VerticalAlignment="Center" 
+                                                       TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource SemiColorText1}" />
 
                                             <TextBlock Text="{Binding TypeNameDisplay}" 
                                                        FontSize="11" 
                                                        Foreground="{DynamicResource SemiColorText3}"
-                                                       VerticalAlignment="Center"
-                                                       Opacity="0.7"/>
+                                                       Opacity="0.8"/>
                                         </StackPanel>
 
                                         <!-- Value Editor or Preview -->
-                                        <Panel Grid.Column="2" MinWidth="150" VerticalAlignment="Center">
+                                        <Panel Grid.Column="2" VerticalAlignment="Center">
                                             <!-- String Editor -->
                                             <TextBox Text="{Binding Value, Mode=TwoWay}" 
                                                      IsVisible="{Binding IsStringEditorVisible}" 
                                                      IsReadOnly="{Binding IsReadOnly}"
+                                                     MaxHeight="100"
+                                                     AcceptsReturn="False"
+                                                     TextWrapping="Wrap"
+                                                     
                                                      Classes.error="{Binding ErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}" />
-         
+          
                                             <!-- Numeric Editor -->
                                             <TextBox Text="{Binding Value, Mode=TwoWay}"
                                                      IsVisible="{Binding IsNumericEditorVisible}"
                                                      IsReadOnly="{Binding IsReadOnly}"
+                                                     HorizontalContentAlignment="Right"
                                                      Loaded="OnNumericTextBoxLoaded"
+                                                     
                                                      Classes.error="{Binding ErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}" />
-         
+          
                                             <!-- Boolean Editor -->
                                             <CheckBox IsChecked="{Binding Value, Mode=TwoWay}"
                                                       IsVisible="{Binding IsBooleanEditorVisible}" 
                                                       IsEnabled="{Binding !IsReadOnly}"
                                                       Theme="{DynamicResource PureCheckBox}"
+                                                      HorizontalAlignment="Right"
                                                       Classes.error="{Binding ErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}" />
-         
+          
                                             <!-- Complex Type Preview -->
-                                            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsComplexEditorVisible}">
+                                            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsComplexEditorVisible}" HorizontalAlignment="Right">
                                                 <TextBlock Text="{Binding ComplexTypePreview}" 
-                                                           VerticalAlignment="Center" FontSize="12" 
+                                                           VerticalAlignment="Center" FontSize="13" 
                                                            Foreground="{DynamicResource SemiColorText3}"
                                                            FontStyle="Italic"/>
                                                 <Button Theme="{DynamicResource BorderlessButton}"
                                                         Foreground="{DynamicResource SemiColorPrimary}"
-                                                        ToolTip.Tip="添加项"
+                                                        ToolTip.Tip="{DynamicResource L_AddSubItem}"
                                                         IsVisible="{Binding CanAddChildren}"
-                                                        Command="{Binding AddChildCommand}">
-                                                    <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12"/>
+                                                        Command="{Binding AddChildCommand}"
+                                                        Padding="4">
+                                                    <PathIcon Data="{StaticResource IconPlus}" Width="14" Height="14"/>
                                                 </Button>
                                             </StackPanel>
                                         </Panel>
 
-                                        <!-- Remove Button for items that can be removed -->
+                                        <!-- Remove Button -->
                                         <Button Grid.Column="3" Theme="{DynamicResource BorderlessButton}"
                                                 Foreground="{DynamicResource SemiColorDanger}"
                                                 IsVisible="{Binding CanRemove}"
                                                 Command="{Binding RemoveSelfCommand}"
-                                                Margin="8,0,0,0">
-                                            <PathIcon Data="{StaticResource IconDelete}" Width="12" Height="12"/>
+                                                Margin="12,0,0,0"
+                                                Padding="4"
+                                                ToolTip.Tip="{DynamicResource L_DeleteRecord}">
+                                            <PathIcon Data="{StaticResource IconDelete}" Width="14" Height="14"/>
                                         </Button>
                                     </Grid>
                                     
@@ -128,16 +156,17 @@
                                     <TextBlock Text="{Binding ErrorMessage}" 
                                                IsVisible="{Binding ErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}"
                                                FontSize="11" Foreground="{DynamicResource SemiColorDanger}"
-                                               Margin="32,4,0,0"/>
+                                               Margin="38,0,0,0"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Recursive Children -->
                             <Border IsVisible="{Binding IsExpanded}"
-                                    Margin="32,4,0,0"
-                                    BorderBrush="{DynamicResource SemiColorBorder}"
+                                    Margin="38,8,0,0"
+                                    BorderBrush="{DynamicResource SemiColorPrimaryLight}"
                                     BorderThickness="2,0,0,0"
-                                    Padding="12,0,0,0">
+                                    Opacity="1.0"
+                                    Padding="16,0,0,0">
                                 <ItemsControl ItemsSource="{Binding Children}" ItemTemplate="{Binding $parent[ItemsControl].ItemTemplate}" />
                             </Border>
                         </StackPanel>
@@ -145,24 +174,31 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
- 
+  
         <!-- Footer Area -->
-        <Border Grid.Row="2" Background="{DynamicResource SemiColorFill1}" CornerRadius="12" Padding="16" Margin="0,16,0,0">
+        <Border Grid.Row="2" Background="{DynamicResource SemiColorFill1}" CornerRadius="16" Padding="20" Margin="0,20,0,0"
+                BorderBrush="{DynamicResource SemiColorBorder}" BorderThickness="1" MinHeight="80">
             <Grid ColumnDefinitions="*, Auto">
-                <!-- Status/Error Box -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <PathIcon Data="{StaticResource IconWarning}" Width="14" Height="14" 
+                <!-- Status/Error Box (Always above buttons to prevent overlap) -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" 
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding WindowErrorMessage, Converter={x:Static dataConv:StringConverters.IsNotNullOrEmpty}}"
+                            Margin="0,0,20,0">
+                    <PathIcon Data="{StaticResource IconWarning}" Width="16" Height="16" 
+                              VerticalAlignment="Center"
                               Foreground="{Binding WindowErrorMessage, Converter={x:Static vm:WindowConverters.ErrorForegroundConverter}}"/>
-                    <TextBlock Text="{Binding WindowErrorMessage, FallbackValue='数据验证中...'}" 
+                    <TextBlock Text="{Binding WindowErrorMessage}" 
                                Foreground="{Binding WindowErrorMessage, Converter={x:Static vm:WindowConverters.ErrorForegroundConverter}}" 
-                               FontSize="12"
+                               FontSize="13"
                                FontWeight="SemiBold"
+                               VerticalAlignment="Center"
                                TextWrapping="Wrap" />
                 </StackPanel>
- 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
-                    <Button Theme="{DynamicResource LightButton}" Content="取消" Width="100" Click="OnCancelClick" IsCancel="True"/>
-                    <Button Theme="{DynamicResource SolidButton}" Content="保存修改" Width="120" Click="OnSaveClick" IsDefault="True"/>
+  
+                <!-- Action Buttons (Right Side) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <Button Theme="{DynamicResource LightButton}" Content="{DynamicResource L_Cancel}" Width="100" Height="40" Click="OnCancelClick" IsCancel="True"/>
+                    <Button Theme="{DynamicResource SolidButton}" Content="{DynamicResource L_SaveChanges}" Width="120" Height="40" Click="OnSaveClick" IsDefault="True"/>
                 </StackPanel>
             </Grid>
         </Border>

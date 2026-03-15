@@ -3,17 +3,21 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Linq;
 using LiteDB;
 using LiteDBEditor.Models;
+using LiteDBEditor.Services;
 
 namespace LiteDBEditor.ViewModels;
 
 public partial class DynamicPropertiesViewModel : ViewModelBase
 {
     #region 弹窗状态与集合
+    
+    public event Action<DynamicPropertyItemViewModel>? RequestScrollToError;
 
     [ObservableProperty]
-    private string _title = "编辑文档";
+    private string _title = LanguageService.GetString("L_EditDocument");
 
     [ObservableProperty]
     private ObservableCollection<DynamicPropertyItemViewModel> _properties = new();
@@ -27,6 +31,11 @@ public partial class DynamicPropertiesViewModel : ViewModelBase
     private BsonDocument? _targetBsonDocument;
     private Func<BsonDocument, Task<bool>>? _onSaveAsync;
     private SchemaData? _schemaData;
+
+    /// <summary>
+    /// 注入的全局查重回调
+    /// </summary>
+    public Func<string, BsonValue, bool>? GlobalIdDuplicateCheckFunc { get; set; }
 
     #endregion
 
@@ -46,15 +55,18 @@ public partial class DynamicPropertiesViewModel : ViewModelBase
         _onSaveAsync = onSaveAsync;
         ContextPath = contextPath;
 
-        Title = string.IsNullOrEmpty(ContextPath)
-            ? $"编辑文档 - {schemaData.TargetName}"
-            : $"编辑: {ContextPath}";
+        UpdateTitle();
+        
+        // 订阅语言变更以更新标题
+        LanguageService.LanguageChanged += UpdateTitle;
+
         Properties.Clear();
 
         // 依据 Schema 定义构建第一层属性项
         foreach (var propertySchema in schemaData.Properties)
         {
             var itemVm = new DynamicPropertyItemViewModel();
+            itemVm.IdDuplicateCheckFunc = GlobalIdDuplicateCheckFunc;
             // 在这一步将会把 document 注入到 ViewModel 里进行监控管理
             itemVm.InitializeWithDocument(_targetBsonDocument, propertySchema.Name, propertySchema);
             Properties.Add(itemVm);
@@ -96,16 +108,29 @@ public partial class DynamicPropertiesViewModel : ViewModelBase
     /// </summary>
     public async Task<bool> ExecuteSaveAsync()
     {
-        ClearErrors();
-        
-        // 执行递归校验
+        WindowErrorMessage = null;
+
+        var errorNames = new System.Collections.Generic.List<string>();
+        DynamicPropertyItemViewModel? firstErrorVm = null;
+
         foreach (var prop in Properties)
         {
-            if (!prop.Validate(out string? error))
+            var vm = prop.CollectAllErrors(errorNames);
+            if (firstErrorVm == null && vm != null)
             {
-                WindowErrorMessage = $"保存失败：字段 '{prop.DisplayName}' 或其子项存在错误：{error}";
-                return false;
+                firstErrorVm = vm;
             }
+        }
+
+        if (errorNames.Count > 0)
+        {
+            WindowErrorMessage = $"{LanguageService.GetString("L_ValidationErrorPrefix")}{string.Join(", ", errorNames)}";
+            
+            if (firstErrorVm != null)
+            {
+                RequestScrollToError?.Invoke(firstErrorVm);
+            }
+            return false;
         }
 
         if (_targetBsonDocument != null && _onSaveAsync != null)
@@ -116,6 +141,19 @@ public partial class DynamicPropertiesViewModel : ViewModelBase
     }
 
     #endregion
+
+    private void UpdateTitle()
+    {
+        if (_schemaData == null)
+        {
+            Title = LanguageService.GetString("L_EditDocument");
+            return;
+        }
+
+        Title = string.IsNullOrEmpty(ContextPath)
+            ? $"{LanguageService.GetString("L_EditDocument")} - {_schemaData.TargetName}"
+            : $"{LanguageService.GetString("L_EditData")}: {ContextPath}";
+    }
 
     public void ClearErrors()
     {

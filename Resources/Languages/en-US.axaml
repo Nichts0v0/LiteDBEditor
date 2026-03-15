@@ -1,0 +1,49 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <x:String x:Key="L_AppName">LiteDB Editor</x:String>
+    <x:String x:Key="L_OpenDatabase">Open Database...</x:String>
+    <x:String x:Key="L_NewDatabase">New Database...</x:String>
+    <x:String x:Key="L_Collections">Collections</x:String>
+    <x:String x:Key="L_NewCollection">New Collection</x:String>
+    <x:String x:Key="L_DeleteCollectionTip">Delete this collection</x:String>
+    <x:String x:Key="L_DatabaseConnected">Database Connected</x:String>
+    <x:String x:Key="L_SelectCollectionTip">Please select a collection to view data</x:String>
+    <x:String x:Key="L_BindSchema">Bind Schema</x:String>
+    <x:String x:Key="L_NewDocument">New Document</x:String>
+    <x:String x:Key="L_SaveChanges">Save Changes</x:String>
+    <x:String x:Key="L_Cancel">Cancel</x:String>
+    <x:String x:Key="L_UnsavedChanges">⚠ Unsaved Changes</x:String>
+    <x:String x:Key="L_Actions">Actions</x:String>
+    <x:String x:Key="L_EditData">Edit Data</x:String>
+    <x:String x:Key="L_DeleteRecord">Delete Record</x:String>
+    <x:String x:Key="L_ValidationError">Validation Error</x:String>
+    <x:String x:Key="L_Settings">Settings</x:String>
+    <x:String x:Key="L_Language">Language</x:String>
+    <!-- Dynamic Properties Window -->
+    <x:String x:Key="L_EditDocument">Edit Document</x:String>
+    <x:String x:Key="L_KeyName">Key</x:String>
+    <x:String x:Key="L_AddSubItem">Add Item</x:String>
+    <x:String x:Key="L_ValidationErrorPrefix">The following issues were found: </x:String>
+
+    <!-- Schema Editor Window -->
+    <x:String x:Key="L_VisualSchemaEditor">Visual Schema Editor</x:String>
+    <x:String x:Key="L_SchemaManagement">Schema Management</x:String>
+    <x:String x:Key="L_RootClass">Root Class</x:String>
+    <x:String x:Key="L_InnerClasses">Inner Classes</x:String>
+    <x:String x:Key="L_AddInnerClass">Add Inner Class</x:String>
+    <x:String x:Key="L_UseExistingSchema">Use Existing Schema</x:String>
+    <x:String x:Key="L_LoadSelectedSchema">Load Selected</x:String>
+    <x:String x:Key="L_BrowseFromFile">Browse File...</x:String>
+    <x:String x:Key="L_ConfiguringClass">Configuring Class:</x:String>
+    <x:String x:Key="L_InvalidName">Invalid Name</x:String>
+    <x:String x:Key="L_FieldName">Field Name</x:String>
+    <x:String x:Key="L_FieldType">Type</x:String>
+    <x:String x:Key="L_ListElementType">List Element Type:</x:String>
+    <x:String x:Key="L_TargetClassName">➜ Class Name:</x:String>
+    <x:String x:Key="L_SelectDefinedType">Select Defined Type:</x:String>
+    <x:String x:Key="L_AddFieldDefinition">Add Field Definition</x:String>
+    <x:String x:Key="L_PreviewCSharp">Preview C# Code</x:String>
+    <x:String x:Key="L_Save">SAVE</x:String>
+    <x:String x:Key="L_LoadFailed">Load Failed</x:String>
+    <x:String x:Key="L_SaveFailed">Save Failed</x:String>
+</ResourceDictionary>

@@ -16,9 +16,9 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
-
+ 
     <Application.Styles>
-        <semi:SemiTheme Locale="zh-CN" />
+        <semi:SemiTheme />
         <StyleInclude Source="avares://Semi.Avalonia.DataGrid/Index.axaml" />
     </Application.Styles>
 </Application>
