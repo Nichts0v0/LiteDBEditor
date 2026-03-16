@@ -8,7 +8,8 @@
     Title="{DynamicResource L_VisualSchemaEditor}"
     Icon="/Assets/ldbe-256.ico"
     Width="1050" Height="700"
-    WindowStartupLocation="CenterOwner">
+    WindowStartupLocation="CenterOwner"
+    x:Name="RootWindow">
 
     <Window.Resources>
         <conv:EqualsConverter x:Key="EqualsConverter" />
@@ -181,7 +182,7 @@
                                                         Foreground="{DynamicResource SemiColorText2}"
                                                         FontWeight="SemiBold" />
                                                     <ComboBox
-                                                        ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableTypes}"
+                                                        ItemsSource="{Binding DataContext.AvailableTypes, ElementName=RootWindow}"
                                                         SelectedItem="{Binding Type}"
                                                         HorizontalAlignment="Stretch" />
                                                 </StackPanel>
@@ -212,7 +213,7 @@
                                                             VerticalAlignment="Center" FontSize="13"
                                                             FontWeight="SemiBold" />
                                                         <ComboBox
-                                                            ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableSubTypes}"
+                                                            ItemsSource="{Binding DataContext.AvailableSubTypes, ElementName=RootWindow}"
                                                             SelectedItem="{Binding SubType}"
                                                             Width="120" />
 
@@ -223,7 +224,7 @@
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" />
                                                             <ComboBox
-                                                                ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                                ItemsSource="{Binding DataContext.DefinedClassNames, ElementName=RootWindow}"
                                                                 SelectedItem="{Binding SubCustomTypeName}"
                                                                 Width="180" />
                                                         </StackPanel>
@@ -238,7 +239,7 @@
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" FontWeight="SemiBold" />
                                                             <ComboBox
-                                                                ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableKeyTypes}"
+                                                                ItemsSource="{Binding DataContext.AvailableKeyTypes, ElementName=RootWindow}"
                                                                 SelectedItem="{Binding KeyType}"
                                                                 Width="120" />
                                                         </StackPanel>
@@ -253,7 +254,7 @@
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" FontWeight="SemiBold" />
                                                             <ComboBox
-                                                                ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).AvailableSubTypes}"
+                                                                ItemsSource="{Binding DataContext.AvailableSubTypes, ElementName=RootWindow}"
                                                                 SelectedItem="{Binding SubType}"
                                                                 Width="120" />
                                                         </StackPanel>
@@ -265,7 +266,7 @@
                                                                 VerticalAlignment="Center"
                                                                 FontSize="13" />
                                                             <ComboBox
-                                                                ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                                ItemsSource="{Binding DataContext.DefinedClassNames, ElementName=RootWindow}"
                                                                 SelectedItem="{Binding SubCustomTypeName}"
                                                                 Width="160" />
                                                         </StackPanel>
@@ -279,7 +280,7 @@
                                                             VerticalAlignment="Center" FontSize="13"
                                                             FontWeight="SemiBold" />
                                                         <ComboBox
-                                                            ItemsSource="{Binding $parent[Window].((vm:SchemaEditorViewModel)DataContext).DefinedClassNames}"
+                                                            ItemsSource="{Binding DataContext.DefinedClassNames, ElementName=RootWindow}"
                                                             SelectedItem="{Binding CustomTypeName}"
                                                             Width="250" />
                                                     </StackPanel>

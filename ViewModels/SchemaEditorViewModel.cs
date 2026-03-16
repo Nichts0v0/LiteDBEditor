@@ -46,19 +46,30 @@ public partial class SchemaEditorViewModel : ViewModelBase
     private string? _errorMessage;
 
     // 获取所有已定义的类名（用于字段类型快速引用）
-    public List<string> DefinedClassNames
-    {
-        get
-        {
-            var names = new List<string> { MainClass.ClassName };
-            names.AddRange(MainClass.InnerClasses.Select(c => c.ClassName));
-            return names.Distinct().ToList();
-        }
-    }
+    public ObservableCollection<string> DefinedClassNames { get; } = new();
 
     public void RefreshClassNames()
     {
-        OnPropertyChanged(nameof(DefinedClassNames));
+        var names = new List<string> { MainClass.ClassName };
+        names.AddRange(MainClass.InnerClasses.Select(c => c.ClassName));
+        var distinctNames = names.Distinct().OrderBy(n => n).ToList();
+
+        // 智能同步：保持集合引用和未变动项的稳定性
+        // 1. 移除已不存在的项
+        var toRemove = DefinedClassNames.Where(n => !distinctNames.Contains(n)).ToList();
+        foreach (var name in toRemove)
+        {
+            DefinedClassNames.Remove(name);
+        }
+
+        // 2. 添加新项，并尝试保持现有顺序或直接追加
+        foreach (var name in distinctNames)
+        {
+            if (!DefinedClassNames.Contains(name))
+            {
+                DefinedClassNames.Add(name);
+            }
+        }
     }
 
     // 现有模板列表 (文件名)
@@ -91,6 +102,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
         {
             _mainClass.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ClassDefinition.ClassName)) RefreshClassNames(); };
             LoadExistingSchemas();
+            RefreshClassNames();
             // 初始化时默认添加一个字段
             AddField();
         }
