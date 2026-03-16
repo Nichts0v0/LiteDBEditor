@@ -167,5 +167,45 @@ public class DatabaseService : IDisposable
         return collection.Delete(id);
     }
 
+    /// <summary>
+    /// 物理重命名整个集合中所有文档的特定字段（数据保持不变）
+    /// </summary>
+    public void RenameField(string collectionName, string oldFieldName, string newFieldName)
+    {
+        if (_database == null) return;
+        var collection = _database.GetCollection(collectionName);
+        var docs = collection.FindAll().ToList();
+
+        foreach (var doc in docs)
+        {
+            if (doc.ContainsKey(oldFieldName))
+            {
+                var val = doc[oldFieldName];
+                doc.Remove(oldFieldName);
+                doc[newFieldName] = val;
+                collection.Update(doc);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 物理删除整个集合中所有文档的特定字段（永久抹除该列数据）
+    /// </summary>
+    public void RemoveFieldPermanently(string collectionName, string fieldName)
+    {
+        if (_database == null) return;
+        var collection = _database.GetCollection(collectionName);
+        var docs = collection.FindAll().ToList();
+
+        foreach (var doc in docs)
+        {
+            if (doc.ContainsKey(fieldName))
+            {
+                doc.Remove(fieldName);
+                collection.Update(doc);
+            }
+        }
+    }
+
     #endregion
 }

@@ -102,8 +102,16 @@
                                 x:Name="ExistingSchemasList"
                                 Background="{DynamicResource SemiColorFill1}" CornerRadius="4">
                                 <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" Padding="4" FontSize="12" />
+                                    <DataTemplate DataType="vm:SchemaItem">
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBlock Text="{Binding Name}" FontSize="12" VerticalAlignment="Center" />
+                                            <Border Grid.Column="1" IsVisible="{Binding IsBound}"
+                                                Background="{DynamicResource SemiColorPrimary4}"
+                                                CornerRadius="4" Padding="6,1" Margin="8,0,0,0">
+                                                <TextBlock Text="Current" Foreground="{DynamicResource SemiColorPrimary}"
+                                                    FontSize="10" FontWeight="Bold" />
+                                            </Border>
+                                        </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>

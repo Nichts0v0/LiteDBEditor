@@ -17,6 +17,8 @@ public enum FieldType
 
 public partial class FieldDefinition : ObservableObject
 {
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
     [ObservableProperty]
     private string _fieldName = "NewField";
 
@@ -50,6 +52,8 @@ public partial class FieldDefinition : ObservableObject
 
 public partial class ClassDefinition : ObservableObject
 {
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+
     [ObservableProperty]
     private string _className = "NewClass";
 

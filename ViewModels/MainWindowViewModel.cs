@@ -9,22 +9,23 @@ using CommunityToolkit.Mvvm.Input;
 using LiteDB;
 using LiteDBEditor.Models;
 using LiteDBEditor.Services;
+using LiteDBEditor;
 
 namespace LiteDBEditor.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    private readonly DatabaseService _dbService;
-    private readonly SchemaBindingService _bindingService;
-
     [ObservableProperty]
     private string _windowTitle = "LiteDB Editor";
 
     [ObservableProperty]
-    private bool _isDatabaseLoaded;
+    private string? _currentDbPath;
 
     [ObservableProperty]
     private string? _currentDbFileName;
+
+    [ObservableProperty]
+    private bool _isDatabaseLoaded;
 
     [ObservableProperty]
     private ObservableCollection<string> _collections = new();
@@ -33,26 +34,42 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? _selectedCollection;
 
     [ObservableProperty]
-    private ObservableCollection<BsonDocumentWrapper> _documents = new();
-
-    [ObservableProperty]
-    private bool _hasUnsavedChanges;
-
-    [ObservableProperty]
-    private SchemaData? _currentSchema;
+    private string? _currentBoundCsFilePath;
 
     [ObservableProperty]
     private string? _currentBoundCsFileName;
 
     [ObservableProperty]
-    private string? _currentBoundCsFilePath;
+    private ObservableCollection<BsonDocumentWrapper> _documents = new();
+
+    [ObservableProperty]
+    private SchemaData? _currentSchema;
+
+    [ObservableProperty]
+    private bool _hasUnsavedChanges;
 
     [ObservableProperty]
     private string? _gridErrorMessage;
 
-    private CancellationTokenSource? _errorCts;
+    private readonly List<BsonDocumentWrapper> _pendingDeletions = new();
+    private CancellationTokenSource? _validationCts;
 
-    private readonly ObservableCollection<BsonDocumentWrapper> _pendingDeletions = new();
+    public event EventHandler<SchemaData?>? SchemaLoaded;
+
+    partial void OnSelectedCollectionChanged(string? value)
+    {
+        if (value != null)
+        {
+            LoadCollectionData(value);
+        }
+        else
+        {
+            Documents.Clear();
+            CurrentSchema = null;
+            CurrentBoundCsFilePath = null;
+            CurrentBoundCsFileName = null;
+        }
+    }
 
     public Dictionary<string, string> AvailableLanguages => LanguageService.AvailableLanguages;
 
@@ -70,9 +87,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
-        _dbService = new DatabaseService();
-        _bindingService = new SchemaBindingService();
-
         // 监听集合变更，确保增删文档时也能触发保存按钮的状态同步
         Documents.CollectionChanged += (s, e) => CheckUnsavedChanges();
     }
@@ -84,10 +98,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            _dbService.OpenDatabase(filePath);
+            DataCenter.Database.OpenDatabase(filePath);
             IsDatabaseLoaded = true;
+            CurrentDbPath = filePath;
             CurrentDbFileName = System.IO.Path.GetFileName(filePath);
-            WindowTitle = $"LiteDB Editor - {_dbService.CurrentDbPath}";
+            WindowTitle = $"LiteDB Editor - {DataCenter.Database.CurrentDbPath}";
 
             RefreshCollections();
         }
@@ -103,21 +118,10 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!IsDatabaseLoaded) return;
 
         Collections.Clear();
-        foreach (var colNames in _dbService.GetCollectionNames())
+        foreach (var colNames in DataCenter.Database.GetCollectionNames())
         {
             Collections.Add(colNames);
         }
-    }
-
-    // Triggered when the user selects a different collection in the ListBox
-    public event EventHandler<SchemaData>? SchemaLoaded;
-
-    partial void OnSelectedCollectionChanged(string? value)
-    {
-        ClearGridError();
-        if (string.IsNullOrEmpty(value)) return;
-
-        LoadCollectionData(value);
     }
 
     private void LoadCollectionData(string collectionName)
@@ -127,22 +131,28 @@ public partial class MainWindowViewModel : ViewModelBase
             // 在重置新表前，先清空文档列表
             Documents.Clear();
 
-            var rawDocs = _dbService.GetDocuments(collectionName, 0, 100);
+            var rawDocs = DataCenter.Database.GetDocuments(collectionName, 0, 100);
 
             var parser = new SchemaParserService();
             SchemaData? properties = null;
 
-            if (_dbService.CurrentDbPath != null)
+            if (DataCenter.Database.CurrentDbPath != null)
             {
-                var boundPath = _bindingService.GetBoundSchemaFilePath(_dbService.CurrentDbPath, collectionName);
+                var boundPath = DataCenter.Bindings.GetBoundSchemaFilePath(DataCenter.Database.CurrentDbPath, collectionName);
                 if (!string.IsNullOrEmpty(boundPath))
                 {
                     CurrentBoundCsFilePath = boundPath;
                     CurrentBoundCsFileName = System.IO.Path.GetFileName(boundPath);
-                    var boundCode = _bindingService.GetBoundSchemaCode(_dbService.CurrentDbPath, collectionName);
-                    if (!string.IsNullOrEmpty(boundCode))
+                    
+                    // 核心变更：从 .schema.json 加载元数据，并执行递归深层转换
+                    var classDef = DataCenter.Metadata.LoadMetadata(boundPath);
+                    if (classDef != null)
                     {
-                        properties = parser.ParseFromCSharpSyntax(boundCode, collectionName);
+                        properties = new SchemaData 
+                        { 
+                            TargetName = collectionName,
+                            Properties = MapClassToProperties(classDef, classDef)
+                        };
                     }
                 }
                 else
@@ -152,44 +162,42 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
             }
 
-            if (properties == null)
+            // 如果没有绑定成功，尝试根据第一个文档自动推断（保持旧逻辑兼容性）
+            if (properties == null && rawDocs.Count > 0)
             {
                 properties = parser.ParseFromBsonDocument(collectionName, rawDocs.FirstOrDefault() ?? new BsonDocument());
             }
 
             CurrentSchema = properties;
-
-            // 重要：先通知 View 更新列结构，此时 Documents 还是空的，避开渲染冲突
-            Console.WriteLine($"[Info] Loading schema for {collectionName}, properties count: {properties.Properties.Count}");
             SchemaLoaded?.Invoke(this, properties);
 
-            // 然后再填充数据，此时 DataGrid 已经准备好了正确的列
             foreach (var doc in rawDocs)
             {
-                var wrapper = new BsonDocumentWrapper(doc, OnDocumentModified);
-                Documents.Add(wrapper);
+                var docViewModel = new BsonDocumentWrapper(doc, d => CheckUnsavedChanges());
+                // 监听文档中的值变更
+                docViewModel.PropertyChanged += (s, e) => 
+                {
+                    if (e.PropertyName == nameof(BsonDocumentWrapper.IsModified))
+                    {
+                        CheckUnsavedChanges();
+                    }
+                };
+                Documents.Add(docViewModel);
             }
-            Console.WriteLine($"[Success] Loaded {Documents.Count} documents for {collectionName}");
+
+            CheckUnsavedChanges();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Error] LoadCollectionData failed for {collectionName}: {ex.Message}");
-            CurrentSchema = new SchemaData { TargetName = collectionName };
-            SchemaLoaded?.Invoke(this, CurrentSchema);
+            Console.WriteLine($"Error loading collection data: {ex.Message}");
         }
-    }
-
-    // 给外部弹窗调用：弹窗编辑后强制触发
-    public void ForceSaveDocument(BsonDocumentWrapper wrapper)
-    {
-        OnDocumentModified(wrapper);
     }
 
     public void BindSchemaFile(string csFilePath)
     {
-        if (string.IsNullOrEmpty(SelectedCollection) || string.IsNullOrEmpty(_dbService.CurrentDbPath)) return;
+        if (string.IsNullOrEmpty(SelectedCollection) || string.IsNullOrEmpty(DataCenter.Database.CurrentDbPath)) return;
 
-        _bindingService.BindSchema(_dbService.CurrentDbPath, SelectedCollection, csFilePath);
+        DataCenter.Bindings.BindSchema(DataCenter.Database.CurrentDbPath, SelectedCollection, csFilePath);
 
         LoadCollectionData(SelectedCollection);
     }
@@ -198,11 +206,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!IsDatabaseLoaded) return;
 
-        _dbService.CreateCollection(collectionName);
+        DataCenter.Database.CreateCollection(collectionName);
 
-        if (!string.IsNullOrEmpty(boundCsFilePath) && _dbService.CurrentDbPath != null)
+        if (!string.IsNullOrEmpty(boundCsFilePath) && DataCenter.Database.CurrentDbPath != null)
         {
-            _bindingService.BindSchema(_dbService.CurrentDbPath, collectionName, boundCsFilePath);
+            DataCenter.Bindings.BindSchema(DataCenter.Database.CurrentDbPath, collectionName, boundCsFilePath);
         }
 
         RefreshCollections();
@@ -213,7 +221,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!IsDatabaseLoaded || string.IsNullOrEmpty(SelectedCollection)) return;
 
-        _dbService.DropCollection(SelectedCollection);
+        DataCenter.Database.DropCollection(SelectedCollection);
         RefreshCollections();
         SelectedCollection = Collections.FirstOrDefault();
     }
@@ -223,12 +231,69 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!IsDatabaseLoaded || string.IsNullOrEmpty(collectionName)) return;
 
-        _dbService.DropCollection(collectionName);
+        DataCenter.Database.DropCollection(collectionName);
         RefreshCollections();
         if (SelectedCollection == collectionName)
         {
             SelectedCollection = Collections.FirstOrDefault();
         }
+    }
+
+    /// <summary>
+    /// 清除网格级别的全局错误提示
+    /// </summary>
+    public void ClearGridError()
+    {
+        GridErrorMessage = null;
+    }
+
+    /// <summary>
+    /// 检查指定 ID 是否在当前集合或内存文档中存在重复
+    /// </summary>
+    public bool IsIdDuplicate(BsonValue newVal, BsonDocumentWrapper? exclude = null)
+    {
+        if (string.IsNullOrEmpty(SelectedCollection)) return false;
+
+        // 1. 检查当前 ObservableCollection 中的内存数据
+        foreach (var doc in Documents)
+        {
+            if (doc == exclude) continue;
+            var currentId = doc.GetRawValue("_id");
+            if (currentId == newVal) return true;
+        }
+
+        // 2. 只有当 exclude 不为 null 时（即在编辑现有文档），才需要检查数据库中是否存在由于未完全加载导致的 ID 冲突
+        // (如果是新建文档，上面循环已经涵盖了所有尚未提交的新 ID)
+        return false; 
+    }
+
+    /// <summary>
+    /// 标记文档待删除，并从 UI 列表中移除
+    /// </summary>
+    public void MarkDocumentForDeletion(BsonDocumentWrapper doc)
+    {
+        if (doc == null) return;
+        
+        if (doc.OriginalId != BsonValue.Null)
+        {
+            _pendingDeletions.Add(doc);
+        }
+        Documents.Remove(doc);
+        CheckUnsavedChanges();
+    }
+
+    /// <summary>
+    /// 强制执行一次单个文档的保存 (通常用于弹窗保存后的立即同步)
+    /// </summary>
+    public void ForceSaveDocument(BsonDocumentWrapper doc)
+    {
+        if (string.IsNullOrEmpty(SelectedCollection) || doc == null) return;
+
+        var finalDoc = doc.GetMergedDocument();
+        DataCenter.Database.UpsertDocument(SelectedCollection, finalDoc);
+        doc.AcceptChanges();
+        doc.SyncOriginalId();
+        CheckUnsavedChanges();
     }
 
     public void RenameCollection(string oldName, string newName)
@@ -242,21 +307,21 @@ public partial class MainWindowViewModel : ViewModelBase
             if (string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
             {
                 var tempName = oldName + "_tmp_" + Guid.NewGuid().ToString("N");
-                if (_dbService.RenameCollection(oldName, tempName))
+                if (DataCenter.Database.RenameCollection(oldName, tempName))
                 {
-                    success = _dbService.RenameCollection(tempName, newName);
+                    success = DataCenter.Database.RenameCollection(tempName, newName);
                 }
             }
             else
             {
-                success = _dbService.RenameCollection(oldName, newName);
+                success = DataCenter.Database.RenameCollection(oldName, newName);
             }
 
             if (success)
             {
-                if (_dbService.CurrentDbPath != null)
+                if (DataCenter.Database.CurrentDbPath != null)
                 {
-                    _bindingService.RenameBinding(_dbService.CurrentDbPath, oldName, newName);
+                    DataCenter.Bindings.RenameBinding(DataCenter.Database.CurrentDbPath, oldName, newName);
                 }
 
                 RefreshCollections();
@@ -273,27 +338,44 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>
-    /// 将文档标记为待删除（软删除），仅从界面移除并存入待处理队列。
-    /// </summary>
-    public void MarkDocumentForDeletion(BsonDocumentWrapper wrapper)
+    [RelayCommand]
+    private void AddNewDocument()
     {
-        if (Documents.Remove(wrapper))
+        if (string.IsNullOrEmpty(SelectedCollection)) return;
+
+        var newDoc = new BsonDocument();
+        // 如果有 Schema，尝试初始化一些字段
+        if (CurrentSchema != null)
         {
-            _pendingDeletions.Add(wrapper);
-            CheckUnsavedChanges();
+            foreach (var prop in CurrentSchema.Properties)
+            {
+                if (prop.Name == "_id") continue;
+                newDoc[prop.Name] = BsonValue.Null;
+            }
         }
+
+        var wrapper = new BsonDocumentWrapper(newDoc, d => CheckUnsavedChanges());
+        // wrapper.IsNew = true; // BsonDocumentWrapper 暂时没有 IsNew，通过 OriginalId == Null 来判定
+        wrapper.PropertyChanged += (s, e) => CheckUnsavedChanges();
+        
+        Documents.Add(wrapper);
+        CheckUnsavedChanges();
     }
 
-    private void OnDocumentModified(BsonDocumentWrapper wrapper)
+    [RelayCommand]
+    private void DeleteDocument(BsonDocumentWrapper doc)
     {
-        // 现在不立即存盘，只统计是否有脏数据交由 UI 判断
+        if (doc == null) return;
+        
+        // 记录待删除，点击保存时才执行物理删除
+        _pendingDeletions.Add(doc);
+        Documents.Remove(doc);
         CheckUnsavedChanges();
     }
 
     private void CheckUnsavedChanges()
     {
-        HasUnsavedChanges = Documents.Any(d => d.IsModified) || _pendingDeletions.Any();
+        HasUnsavedChanges = _pendingDeletions.Any() || Documents.Any(d => d.IsModified || d.OriginalId == LiteDB.BsonValue.Null);
     }
 
     [RelayCommand]
@@ -307,113 +389,181 @@ public partial class MainWindowViewModel : ViewModelBase
             foreach (var deleted in _pendingDeletions)
             {
                 // 如果 OriginalId 不为空，说明原来是数据库里的数据，执行物理删除
-                if (deleted.OriginalId != BsonValue.Null)
+                if (deleted.OriginalId != LiteDB.BsonValue.Null)
                 {
-                    _dbService.DeleteDocument(SelectedCollection, deleted.OriginalId);
+                    DataCenter.Database.DeleteDocument(SelectedCollection, deleted.OriginalId);
                 }
             }
             _pendingDeletions.Clear();
 
-            // 2. 处理已修改或新增的数据
+            // 2. 处理编辑和新增的数据
             foreach (var doc in Documents)
             {
-                if (doc.IsModified)
+                if (doc.IsModified || doc.OriginalId == LiteDB.BsonValue.Null)
                 {
+                    var finalDoc = doc.GetMergedDocument();
+
                     // 检查 ID 是否发生变更
-                    var currentId = doc.GetRawValue("_id");
-                    if (doc.OriginalId != BsonValue.Null && doc.OriginalId != currentId)
+                    var currentId = finalDoc["_id"];
+                    if (doc.OriginalId != LiteDB.BsonValue.Null && doc.OriginalId != currentId)
                     {
-                        // ID 变了，先删除旧键记录，防止产生重复项
-                        _dbService.DeleteDocument(SelectedCollection, doc.OriginalId);
+                        // ID 变了，先删除旧键记录
+                        DataCenter.Database.DeleteDocument(SelectedCollection, doc.OriginalId);
                     }
 
+                    // 核心修复：直接使用过滤、合并后的 finalDoc 进行保存
+                    DataCenter.Database.UpsertDocument(SelectedCollection, finalDoc);
+                    
+                    // 同步状态
                     doc.AcceptChanges();
-                    _dbService.UpsertDocument(SelectedCollection, doc.Document);
-                    doc.SyncOriginalId(); // 更新原始 ID 追踪，使其在下次修改时以此为准
+                    doc.SyncOriginalId();
                 }
             }
+
             CheckUnsavedChanges();
-            Console.WriteLine("[Success] Changes saved to database.");
+            Console.WriteLine("Changes saved successfully!");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Error] SaveChanges failed: {ex.Message}");
-            // TODO: 这里可以考虑通知 UI 弹窗报错，但至少现在不会导致程序直接闪退
+            Console.WriteLine($"Error saving changes: {ex.Message}");
+            GridErrorMessage = $"Save failed: {ex.Message}";
         }
     }
 
     [RelayCommand]
     private void CancelChanges()
     {
-        // 1. 还原并移除新增加的数据
-        var toRemove = Documents.Where(d => d.OriginalId == BsonValue.Null).ToList();
-        foreach (var newDoc in toRemove)
-        {
-            Documents.Remove(newDoc);
-        }
+        if (string.IsNullOrEmpty(SelectedCollection)) return;
 
-        // 2. 还原已修改的数据
-        foreach (var doc in Documents)
-        {
-            if (doc.IsModified)
-            {
-                doc.RejectChanges();
-            }
-        }
-
-        // 3. 还原被删除的数据（插回界面显示）
-        // 如果被删除的数据是原本就在数据库里的记录，则恢复；如果是“新增后又被点删除”的数据，则不做还原（因为它从未入库）
+        // 1. 还原待删除项
         foreach (var deleted in _pendingDeletions)
         {
-            if (deleted.OriginalId != BsonValue.Null)
-            {
-                Documents.Add(deleted);
-            }
+            Documents.Add(deleted);
         }
         _pendingDeletions.Clear();
 
+        // 2. 还原所有文档的修改，并移除尚未入库的新增文档
+        var toRemove = Documents.Where(d => d.OriginalId == LiteDB.BsonValue.Null).ToList();
+        foreach (var doc in toRemove)
+        {
+            Documents.Remove(doc);
+        }
+
+        foreach (var doc in Documents)
+        {
+            doc.ResetChanges();
+        }
+
         CheckUnsavedChanges();
-    }
-
-    /// <summary>
-    /// 检测给定的 ID 是否与当前显示列表中的任何行冲突。
-    /// 校验范围包含原始数据和尚未保存的更改。
-    /// </summary>
-    public bool IsIdDuplicate(BsonValue newId, BsonDocumentWrapper? excludeWrapper = null)
-    {
-        return Documents.Any(d =>
-            d != excludeWrapper &&
-            d.GetRawValue("_id") == newId);
-    }
-
-    public async void ClearGridError()
-    {
-        _errorCts?.Cancel();
-        _errorCts = null;
-        GridErrorMessage = null;
+        this.GridErrorMessage = null;
     }
 
     partial void OnGridErrorMessageChanged(string? value)
     {
         if (!string.IsNullOrEmpty(value))
         {
-            // 每次设置新错误时，重置自动清除计时器
-            _errorCts?.Cancel();
-            _errorCts = new CancellationTokenSource();
-            var token = _errorCts.Token;
-
+            // 3秒后自动清除错误消息
+            _validationCts?.Cancel();
+            _validationCts = new CancellationTokenSource();
+            var token = _validationCts.Token;
+            
             Task.Run(async () =>
             {
-                try
+                await Task.Delay(3000, token);
+                if (!token.IsCancellationRequested)
                 {
-                    await Task.Delay(3000, token);
-                    if (!token.IsCancellationRequested)
-                    {
-                        GridErrorMessage = null;
-                    }
+                    GridErrorMessage = null;
                 }
-                catch (TaskCanceledException) { /* 忽略取消 */ }
             }, token);
         }
     }
+
+    #region 递归 Schema 转换映射助手
+
+    /// <summary>
+    /// 将 ClassDefinition 转换为后端 UI 渲染所需的 SchemaProperty 列表
+    /// </summary>
+    private List<SchemaProperty> MapClassToProperties(ClassDefinition targetClass, ClassDefinition root)
+    {
+        var result = new List<SchemaProperty>();
+        
+        // 显式添加 ID 字段（LiteDB 约定）
+        result.Add(new SchemaProperty 
+        { 
+            Name = "_id", 
+            DisplayName = "_id", 
+            TypeName = "String", // 默认显示为字符串
+            IsRequired = true 
+        });
+
+        foreach (var field in targetClass.Fields)
+        {
+            result.Add(MapFieldToProperty(field, root));
+        }
+        return result;
+    }
+
+    private SchemaProperty MapFieldToProperty(FieldDefinition field, ClassDefinition root)
+    {
+        var p = new SchemaProperty
+        {
+            Name = field.FieldName,
+            DisplayName = field.FieldName,
+            TypeName = MapFieldTypeToString(field.Type),
+            IsRequired = true // 默认必填
+        };
+
+        // 处理复杂容器或嵌套
+        if (field.Type == FieldType.List || field.Type == FieldType.Dictionary)
+        {
+            p.ElementSchema = new SchemaProperty
+            {
+                Name = field.Type == FieldType.List ? "Item" : "Value",
+                TypeName = MapFieldTypeToString(field.SubType)
+            };
+
+            // 如果容器内部是自定义类
+            if (field.SubType == FieldType.Custom && !string.IsNullOrEmpty(field.SubCustomTypeName))
+            {
+                p.ElementSchema.CSharpTypeName = field.SubCustomTypeName;
+                var subClass = FindClassByName(field.SubCustomTypeName, root);
+                if (subClass != null)
+                {
+                    p.ElementSchema.NestedProperties = MapClassToProperties(subClass, root);
+                }
+            }
+        }
+        else if (field.Type == FieldType.Custom && !string.IsNullOrEmpty(field.CustomTypeName))
+        {
+            p.CSharpTypeName = field.CustomTypeName;
+            var targetClass = FindClassByName(field.CustomTypeName, root);
+            if (targetClass != null)
+            {
+                p.NestedProperties = MapClassToProperties(targetClass, root);
+            }
+        }
+
+        return p;
+    }
+
+    private string MapFieldTypeToString(FieldType type)
+    {
+        return type switch
+        {
+            FieldType.Bool => "Boolean",
+            FieldType.List => "Array",
+            FieldType.Custom => "Document",
+            FieldType.Int => "Int32",
+            FieldType.Float => "Double",
+            _ => type.ToString()
+        };
+    }
+
+    private ClassDefinition? FindClassByName(string name, ClassDefinition root)
+    {
+        if (root.ClassName == name) return root;
+        return root.InnerClasses.FirstOrDefault(c => c.ClassName == name);
+    }
+
+    #endregion
 }

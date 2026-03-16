@@ -411,5 +411,42 @@ public class SchemaParserService
         };
     }
 
+    /// <summary>
+    /// 严格应用 Schema：移除 document 中不在 schema 定义范围内的所有多余字段。
+    /// 启发式增强：如果文档中正好缺失一个字段，且多出一个字段，则视为重命名并迁移数据。
+    /// </summary>
+    public bool ApplySchemaStrictly(BsonDocument document, SchemaData schema)
+    {
+        bool modified = false;
+        var allowedNames = new HashSet<string>(schema.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+        
+        var currentKeys = document.Keys.ToList();
+        var extraKeys = currentKeys.Where(k => k != "_id" && !allowedNames.Contains(k)).ToList();
+        var missingKeys = schema.Properties.Select(p => p.Name).Where(n => n != "_id" && !document.ContainsKey(n)).ToList();
+
+        // --- 启发式重命名识别 ---
+        // 如果文档中多出一个字段且脚本中也刚好缺失一个字段，我们认为发生了重命名，自动执行数据迁移
+        if (extraKeys.Count == 1 && missingKeys.Count == 1)
+        {
+            var oldKey = extraKeys[0];
+            var newKey = missingKeys[0];
+            var val = document[oldKey];
+            document.Remove(oldKey);
+            document[newKey] = val;
+            Console.WriteLine($"[SmartMigration] Field renamed: {oldKey} -> {newKey}");
+            return true;
+        }
+
+        // --- 正常清理多余字段 ---
+        foreach (var key in extraKeys)
+        {
+            document.Remove(key);
+            modified = true;
+            Console.WriteLine($"[SchemaStrict] Removed extra field: {key}");
+        }
+        
+        return modified;
+    }
+
     #endregion
 }

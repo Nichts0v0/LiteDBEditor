@@ -38,9 +38,9 @@ public partial class MainWindow : Window
 
     #region 列模板生成
 
-    private void OnSchemaLoaded(object? sender, SchemaData schemaData)
+    private void OnSchemaLoaded(object? sender, SchemaData? schemaData)
     {
-        if (MainDataGrid == null) return;
+        if (MainDataGrid == null || schemaData == null) return;
 
         // 使用 Dispatcher 确保在 UI 线程执行，并降低优先级防止与布局冲突
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -401,8 +401,9 @@ public partial class MainWindow : Window
         var vm = DataContext as MainWindowViewModel;
         if (vm == null || string.IsNullOrEmpty(vm.SelectedCollection)) return;
 
-        // 自动加载当前表的模板原始文件（如果存在）
-        var dialog = new SchemaEditorWindow { DataContext = new SchemaEditorViewModel(vm.CurrentBoundCsFilePath) };
+        // 自动加载当前表的模板原始文件（如果存在），并传入当前绑定路径用于回显高亮
+        var boundPath = vm.CurrentBoundCsFilePath;
+        var dialog = new SchemaEditorWindow { DataContext = new SchemaEditorViewModel(boundPath, boundPath) };
         var result = await dialog.ShowDialog<SchemaEditorResult?>(this);
 
         if (result != null && !string.IsNullOrWhiteSpace(result.FilePath))

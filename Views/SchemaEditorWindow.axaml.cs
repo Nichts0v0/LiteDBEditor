@@ -40,11 +40,9 @@ public partial class SchemaEditorWindow : Window
     private void OnUseExistingClick(object? sender, RoutedEventArgs e)
     {
         var listBox = this.FindControl<ListBox>("ExistingSchemasList");
-        if (listBox?.SelectedItem is string selectedFile && DataContext is SchemaEditorViewModel vm)
+        if (listBox?.SelectedItem is SchemaItem selected && DataContext is SchemaEditorViewModel vm)
         {
-            // 修改：不再直接关闭返回，而是加载到当前编辑区
-            var result = vm.GetResultFromExisting(selectedFile);
-            if (result != null) vm.LoadFromPath(result.FilePath);
+            vm.LoadFromPath(selected.FullPath);
         }
     }
 
@@ -55,14 +53,16 @@ public partial class SchemaEditorWindow : Window
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "选择 C# 脚本模板",
+            Title = "选择 Schema 模板 (JSON 或 C#)",
             AllowMultiple = false,
-            FileTypeFilter = new[] { new FilePickerFileType("C# Files") { Patterns = new[] { "*.cs" } } }
+            FileTypeFilter = new[] 
+            { 
+                new FilePickerFileType("Schema Files") { Patterns = new[] { "*.schema.json", "*.cs" } } 
+            }
         });
 
         if (files.Count >= 1 && DataContext is SchemaEditorViewModel vm)
         {
-            // 修改：不再直接关闭返回，而是加载到当前编辑区
             var path = files[0].Path.LocalPath;
             vm.LoadFromPath(path);
         }

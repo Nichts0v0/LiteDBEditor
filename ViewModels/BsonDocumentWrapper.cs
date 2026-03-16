@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using LiteDB;
+using LiteDBEditor.Models;
 
 namespace LiteDBEditor.ViewModels;
 
@@ -16,15 +17,21 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     private readonly BsonDocument _document;
     private readonly Action<BsonDocumentWrapper>? _onModified;
     private readonly Dictionary<string, BsonValue> _pendingChanges = new();
+    private readonly HashSet<string> _deletedFields = new();
     private readonly Dictionary<string, string?> _fieldErrors = new();
     private BsonValue _originalId;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>
-    /// Indicates whether this wrapper has any unsaved modifications.
+    /// Indicates whether this wrapper has any unsaved modifications (updates or deletions).
     /// </summary>
-    public bool IsModified => _pendingChanges.Count > 0;
+    public bool IsModified => _pendingChanges.Count > 0 || _deletedFields.Count > 0;
+
+    /// <summary>
+    /// Gets the list of fields marked for physical deletion.
+    /// </summary>
+    public IEnumerable<string> DeletedFields => _deletedFields;
 
     /// <summary>
     /// 记录数据从数据库加载时的初始 ID。
@@ -50,6 +57,22 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
+    /// Reverts all unsaved modifications (clears pending updates and deletions).
+    /// </summary>
+    public void ResetChanges()
+    {
+        _pendingChanges.Clear();
+        _deletedFields.Clear();
+        _fieldErrors.Clear();
+        
+        // Notify UI that all field values might have changed back
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OriginalId)));
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(null)); // Clear all
+    }
+
+    /// <summary>
     /// Checks if a specific field has unsaved changes.
     /// </summary>
     public bool IsFieldModified(string key)
@@ -59,13 +82,19 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
 
     public void AcceptChanges()
     {
-        if (_pendingChanges.Count == 0) return;
+        if (_pendingChanges.Count == 0 && _deletedFields.Count == 0) return;
 
         foreach (var kvp in _pendingChanges)
         {
             _document[kvp.Key] = kvp.Value;
         }
         _pendingChanges.Clear();
+
+        foreach (var field in _deletedFields)
+        {
+            _document.Remove(field);
+        }
+        _deletedFields.Clear();
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
         RefreshAll();
@@ -76,12 +105,83 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     /// </summary>
     public void RejectChanges()
     {
-        if (_pendingChanges.Count == 0) return;
+        if (_pendingChanges.Count == 0 && _deletedFields.Count == 0) return;
 
         _pendingChanges.Clear();
+        _deletedFields.Clear();
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
         RefreshAll();
+    }
+
+    /// <summary>
+    /// 将指定字段标记为待物理删除。
+    /// </summary>
+    public void RemoveField(string key)
+    {
+        if (key == "_id") return;
+
+        bool changed = false;
+        if (_document.ContainsKey(key) || _pendingChanges.ContainsKey(key))
+        {
+            _deletedFields.Add(key);
+            _pendingChanges.Remove(key);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs($"Item[{key}]"));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
+            _onModified?.Invoke(this);
+        }
+    }
+
+    /// <summary>
+    /// 包装器版本的严格 Schema 应用。
+    /// 通过标记修改或删除来确保 IsModified 被正确触发，从而保证“保存”有效。
+    /// </summary>
+    public bool ApplySchemaStrictly(LiteDBEditor.Services.SchemaParserService parser, SchemaData schema)
+    {
+        // 1. 获取合并后的快照视图
+        var merged = GetMergedDocument();
+        
+        // 2. 利用 parser 的启发式逻辑识别变化
+        // 注意：parser 里的逻辑需要调整为区分大小写，这里我们主要利用它识别 extra/missing
+        var allowedNames = new HashSet<string>(schema.Properties.Select(p => p.Name), StringComparer.Ordinal); // 强规则：区分大小写
+        
+        var currentKeys = merged.Keys.ToList();
+        var extraKeys = currentKeys.Where(k => k != "_id" && !allowedNames.Contains(k)).ToList();
+        var missingNames = schema.Properties.Select(p => p.Name).Where(n => n != "_id" && !merged.ContainsKey(n)).ToList();
+
+        bool hasChanged = false;
+
+        // --- 智能重分发 (Smart Migration) ---
+        // 只有当“冗余字段名”和“缺失字段名”在忽略大小写的情况下一致时，才判定为重命名
+        // 否则，防止用户删除 A 增加 B 时，A 的数据错误跑到了 B 里面
+        if (extraKeys.Count == 1 && missingNames.Count == 1 && 
+            string.Equals(extraKeys[0], missingNames[0], StringComparison.OrdinalIgnoreCase))
+        {
+            var oldKey = extraKeys[0];
+            var newKey = missingNames[0];
+            var val = merged[oldKey];
+            
+            // 标记旧字段删除，新字段赋值
+            RemoveField(oldKey);
+            SetRawValueAndNotify(newKey, val);
+            hasChanged = true;
+        }
+        else
+        {
+            // --- 正常清理：不满足重命名条件，直接全部移除 ---
+            foreach (var extra in extraKeys)
+            {
+                RemoveField(extra);
+                hasChanged = true;
+            }
+        }
+
+        return hasChanged;
     }
 
     public BsonDocument Document => _document;
@@ -95,6 +195,10 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         var merged = new BsonDocument(_document);
         foreach (var kvp in _pendingChanges)
             merged[kvp.Key] = kvp.Value;
+        
+        foreach (var field in _deletedFields)
+            merged.Remove(field);
+            
         return merged;
     }
 

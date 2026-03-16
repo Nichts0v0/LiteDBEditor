@@ -62,11 +62,11 @@ public partial class BindSchemaWindow : Window
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "选择表模板 C# 文件",
+            Title = "选择表模板文件 (JSON 或 C#)",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("C# 代码文件") { Patterns = new[] { "*.cs" } }
+                new FilePickerFileType("Schema 模板文件") { Patterns = new[] { "*.schema.json", "*.cs" } }
             }
         });
 

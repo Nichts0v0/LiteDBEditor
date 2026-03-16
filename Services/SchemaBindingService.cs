@@ -18,12 +18,13 @@ public class SchemaBindingService
 
     public SchemaBindingService()
     {
-        _baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Nichts_Studio", "LiteDBEditor", "Schemas");
+        _baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Nichts_Studio", "LiteDBEditor");
+        _bindingFile = Path.Combine(_baseDir, "Bindings.json");
+        
         if (!Directory.Exists(_baseDir))
         {
             Directory.CreateDirectory(_baseDir);
         }
-        _bindingFile = Path.Combine(_baseDir, "Bindings.json");
     }
 
     private Dictionary<string, SchemaBindingInfo> LoadBindings()
@@ -51,35 +52,41 @@ public class SchemaBindingService
         return $"{Path.GetFullPath(dbPath).ToLowerInvariant()}::{collectionName}";
     }
 
-    public void BindSchema(string dbPath, string collectionName, string sourceCsFilePath)
+    public string? GetSchemaPath(string collectionName)
     {
-        if (string.IsNullOrEmpty(sourceCsFilePath) || !File.Exists(sourceCsFilePath))
-        {
-            Console.WriteLine($"[Error] BindSchema failed: Source file not found at {sourceCsFilePath}");
-            return;
-        }
+        var dbPath = DataCenter.Database.CurrentDbPath;
+        if (string.IsNullOrEmpty(dbPath)) return null;
+        return GetBoundSchemaFilePath(dbPath, collectionName);
+    }
+
+    public void BindSchema(string dbPath, string collectionName, string sourcePath)
+    {
+        if (string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) return;
 
         var bindings = LoadBindings();
         var key = GetBindingKey(dbPath, collectionName);
 
-        var fileName = Path.GetFileName(sourceCsFilePath);
-        var destPath = Path.Combine(_baseDir, fileName);
+        // 统一存放在 Schemas 目录下
+        var schemaDir = Path.Combine(_baseDir, "Schemas");
+        if (!Directory.Exists(schemaDir)) Directory.CreateDirectory(schemaDir);
 
-        // 如果源文件已经在这个目录下，就不再复制
-        if (Path.GetFullPath(sourceCsFilePath).StartsWith(_baseDir, StringComparison.OrdinalIgnoreCase))
+        string destPath;
+        if (sourcePath.EndsWith(".schema.json"))
         {
-            destPath = sourceCsFilePath;
+            // 如果已经是 schema.json，直接引用其全路径（或者拷贝一份到 Schemas 目录）
+            // 这里为了管理方便，如果是外部文件，我们拷贝到 Schemas 目录
+            var fileName = Path.GetFileName(sourcePath);
+            destPath = Path.Combine(schemaDir, fileName);
+            if (Path.GetFullPath(sourcePath) != Path.GetFullPath(destPath))
+            {
+                File.Copy(sourcePath, destPath, true);
+            }
         }
         else
         {
-            try
-            {
-                File.Copy(sourceCsFilePath, destPath, true);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Error] BindSchema Copy failed: {ex.Message}");
-            }
+            // 如果是 .cs，则指向对应的 .schema.json
+            var fileName = Path.GetFileNameWithoutExtension(sourcePath) + ".schema.json";
+            destPath = Path.Combine(schemaDir, fileName);
         }
 
         bindings[key] = new SchemaBindingInfo { CSFilePath = destPath };
@@ -102,16 +109,6 @@ public class SchemaBindingService
         }
     }
 
-    public string? GetBoundSchemaCode(string dbPath, string collectionName)
-    {
-        var path = GetBoundSchemaFilePath(dbPath, collectionName);
-        if (!string.IsNullOrEmpty(path))
-        {
-            return File.ReadAllText(path);
-        }
-        return null;
-    }
-
     public string? GetBoundSchemaFilePath(string dbPath, string collectionName)
     {
         if (string.IsNullOrEmpty(dbPath) || string.IsNullOrEmpty(collectionName)) return null;
@@ -128,9 +125,8 @@ public class SchemaBindingService
 
     public List<string> GetAvailableSchemas()
     {
-        if (!Directory.Exists(_baseDir)) return new List<string>();
-
-        // 搜索目录下所有的 .cs 缓存文件
-        return Directory.GetFiles(_baseDir, "*.cs").ToList();
+        var schemaDir = Path.Combine(_baseDir, "Schemas");
+        if (!Directory.Exists(schemaDir)) return new List<string>();
+        return Directory.GetFiles(schemaDir, "*.schema.json").ToList();
     }
 }
