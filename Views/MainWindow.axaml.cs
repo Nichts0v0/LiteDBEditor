@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         
         // 终极确认方案：使用 Tunnel 策略。此事件会在按钮响应点击前优先触发。
-        // handledEventsToo: true 确保即使点击在按钮或滚动条上，我们的逻辑也能执行。
+        // handledEventsToo: true 确保即使点击在按钮 or 滚动条上，我们的逻辑也能执行。
         this.AddHandler(PointerPressedEvent, OnGlobalPointerPressed, RoutingStrategies.Tunnel, true);
     }
 
@@ -501,6 +501,46 @@ public partial class MainWindow : Window
         if (confirm)
         {
             vm.DeleteSpecificCollectionCommand.Execute(collectionName);
+        }
+    }
+
+    private void OnRenameCollectionConfirmClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+
+        var stackPanel = button.Parent as StackPanel;
+        if (stackPanel == null) return;
+
+        var textBox = stackPanel.Children.OfType<TextBox>().FirstOrDefault();
+        if (textBox == null || string.IsNullOrWhiteSpace(textBox.Text)) return;
+
+        var oldName = stackPanel.DataContext as string;
+        var newName = textBox.Text.Trim();
+
+        if (string.IsNullOrEmpty(oldName) || oldName == newName) return;
+
+        var vm = DataContext as MainWindowViewModel;
+        if (vm != null)
+        {
+            vm.RenameCollection(oldName, newName);
+        }
+
+        // 尝试关闭 Flyout
+        var current = (Avalonia.Visual?)button;
+        while (current != null)
+        {
+            if (current is Avalonia.Controls.Primitives.Popup popup)
+            {
+                popup.IsOpen = false;
+                break;
+            }
+            if (current.GetType().Name.Contains("Popup"))
+            {
+                var isOpenProp = current.GetType().GetProperty("IsOpen");
+                isOpenProp?.SetValue(current, false);
+                break;
+            }
+            current = current.Parent as Avalonia.Visual;
         }
     }
 

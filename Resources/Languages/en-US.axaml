@@ -6,6 +6,8 @@
     <x:String x:Key="L_Collections">Collections</x:String>
     <x:String x:Key="L_NewCollection">New Collection</x:String>
     <x:String x:Key="L_DeleteCollectionTip">Delete this collection</x:String>
+    <x:String x:Key="L_RenameCollection">Rename</x:String>
+    <x:String x:Key="L_RenameCollectionTip">Rename this collection</x:String>
     <x:String x:Key="L_DatabaseConnected">Database Connected</x:String>
     <x:String x:Key="L_SelectCollectionTip">Please select a collection to view data</x:String>
     <x:String x:Key="L_BindSchema">Bind Schema</x:String>

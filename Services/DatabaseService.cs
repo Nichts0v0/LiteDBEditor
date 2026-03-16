@@ -78,6 +78,19 @@ public class DatabaseService : IDisposable
         _database.DropCollection(collectionName);
     }
 
+    public bool RenameCollection(string oldName, string newName)
+    {
+        if (_database == null || string.IsNullOrWhiteSpace(newName)) return false;
+        try
+        {
+            return _database.RenameCollection(oldName, newName);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// 获取当前数据库中的所有集合(表)的名称
     /// </summary>

@@ -86,6 +86,22 @@ public class SchemaBindingService
         SaveBindings(bindings);
     }
 
+    public void RenameBinding(string dbPath, string oldName, string newName)
+    {
+        if (string.IsNullOrEmpty(dbPath) || string.IsNullOrEmpty(oldName) || string.IsNullOrEmpty(newName)) return;
+
+        var bindings = LoadBindings();
+        var oldKey = GetBindingKey(dbPath, oldName);
+        var newKey = GetBindingKey(dbPath, newName);
+
+        if (bindings.TryGetValue(oldKey, out var info))
+        {
+            bindings.Remove(oldKey);
+            bindings[newKey] = info;
+            SaveBindings(bindings);
+        }
+    }
+
     public string? GetBoundSchemaCode(string dbPath, string collectionName)
     {
         var path = GetBoundSchemaFilePath(dbPath, collectionName);

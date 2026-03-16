@@ -231,6 +231,48 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public void RenameCollection(string oldName, string newName)
+    {
+        if (!IsDatabaseLoaded || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName) || oldName == newName) return;
+
+        try
+        {
+            bool success = false;
+            // 针对 LiteDB 的处理：如果只是大小写不同，直接重命名可能会失败
+            if (string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase))
+            {
+                var tempName = oldName + "_tmp_" + Guid.NewGuid().ToString("N");
+                if (_dbService.RenameCollection(oldName, tempName))
+                {
+                    success = _dbService.RenameCollection(tempName, newName);
+                }
+            }
+            else
+            {
+                success = _dbService.RenameCollection(oldName, newName);
+            }
+
+            if (success)
+            {
+                if (_dbService.CurrentDbPath != null)
+                {
+                    _bindingService.RenameBinding(_dbService.CurrentDbPath, oldName, newName);
+                }
+
+                RefreshCollections();
+                // 如果当前正在查看这张表，则更新选中项名称，触发重新加载（主要是更新标题等 UI）
+                if (SelectedCollection == oldName)
+                {
+                    SelectedCollection = newName;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Error] RenameCollection failed: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// 将文档标记为待删除（软删除），仅从界面移除并存入待处理队列。
     /// </summary>

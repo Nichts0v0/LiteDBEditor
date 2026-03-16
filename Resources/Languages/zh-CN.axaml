@@ -6,6 +6,8 @@
     <x:String x:Key="L_Collections">集合</x:String>
     <x:String x:Key="L_NewCollection">新建集合</x:String>
     <x:String x:Key="L_DeleteCollectionTip">删除此集合</x:String>
+    <x:String x:Key="L_RenameCollection">修改名称</x:String>
+    <x:String x:Key="L_RenameCollectionTip">重命名此集合</x:String>
     <x:String x:Key="L_DatabaseConnected">数据库已连接</x:String>
     <x:String x:Key="L_SelectCollectionTip">请选择一个集合以查看数据</x:String>
     <x:String x:Key="L_BindSchema">绑定模板</x:String>
