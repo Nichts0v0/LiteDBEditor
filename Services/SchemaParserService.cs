@@ -142,12 +142,15 @@ public class SchemaParserService
     /// <summary>
     /// 递归解析 BsonDocument 的所有元素。
     /// </summary>
-    private List<SchemaProperty> ParseBsonElements(BsonDocument document)
+    private List<SchemaProperty> ParseBsonElements(BsonDocument document, bool isRoot = true)
     {
         var properties = new List<SchemaProperty>();
 
         foreach (var kvp in document)
         {
+            // 嵌套文档不应包含 _id 字段作为 Schema 定义
+            if (!isRoot && kvp.Key == "_id") continue;
+
             var p = new SchemaProperty
             {
                 Name = kvp.Key,
@@ -157,7 +160,7 @@ public class SchemaParserService
 
             if (kvp.Value.IsDocument)
             {
-                p.NestedProperties = ParseBsonElements(kvp.Value.AsDocument);
+                p.NestedProperties = ParseBsonElements(kvp.Value.AsDocument, false);
             }
             else if (kvp.Value.IsArray)
             {
@@ -173,7 +176,7 @@ public class SchemaParserService
 
                     if (firstElement.IsDocument)
                     {
-                        p.ElementSchema.NestedProperties = ParseBsonElements(firstElement.AsDocument);
+                        p.ElementSchema.NestedProperties = ParseBsonElements(firstElement.AsDocument, false);
                     }
                 }
                 else

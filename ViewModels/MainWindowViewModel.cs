@@ -571,14 +571,17 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var result = new List<SchemaProperty>();
         
-        // 显式补充 _id 字段定义
-        result.Add(new SchemaProperty 
-        { 
-            Name = "_id", 
-            DisplayName = "_id", 
-            TypeName = "String", 
-            IsRequired = true 
-        });
+        // 仅在解析顶层类（即集合主类）时显式补充 _id 字段定义
+        if (targetClass == root)
+        {
+            result.Add(new SchemaProperty 
+            { 
+                Name = "_id", 
+                DisplayName = "_id", 
+                TypeName = "String", 
+                IsRequired = true 
+            });
+        }
 
         foreach (var field in targetClass.Fields)
         {
