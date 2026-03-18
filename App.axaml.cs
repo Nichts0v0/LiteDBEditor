@@ -29,10 +29,21 @@ public partial class App : Application
         {
             DisableAvaloniaDataAnnotationValidation();
             
+            var viewModel = new MainWindowViewModel();
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(),
+                DataContext = viewModel,
             };
+
+            // 如果有命令行参数（例如通过右键“打开方式”），尝试直接打开数据库
+            if (desktop.Args != null && desktop.Args.Length > 0)
+            {
+                var filePath = desktop.Args[0];
+                if (System.IO.File.Exists(filePath))
+                {
+                    viewModel.OpenDatabase(filePath);
+                }
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
