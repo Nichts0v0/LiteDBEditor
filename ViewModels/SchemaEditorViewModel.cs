@@ -12,6 +12,9 @@ using LiteDBEditor;
 
 namespace LiteDBEditor.ViewModels;
 
+/// <summary>
+/// SchemaItem 实体类，代表一个可供选择或已绑定的 Schema 文件项。
+/// </summary>
 public class SchemaItem
 {
     public string Name { get; set; } = string.Empty;
@@ -19,21 +22,38 @@ public class SchemaItem
     public bool IsBound { get; set; }
 }
 
+/// <summary>
+/// Schema 编辑器的 ViewModel，提供可视化界面来定义、修改类结构，
+/// 并支持自动同步结构变更到数据库（重命名、删除字段）。
+/// </summary>
 public partial class SchemaEditorViewModel : ViewModelBase
 {
     private readonly CSharpGeneratorService _generator = new();
     private readonly string _schemaDir;
 
+    /// <summary>
+    /// 获取或设置主类定义。
+    /// </summary>
     [ObservableProperty]
     private ClassDefinition _mainClass = new();
 
+    /// <summary>
+    /// 获取或设置当前正在编辑的类定义（可能是主类，也可能是其内部嵌套的辅助类）。
+    /// </summary>
     [ObservableProperty]
-    private ClassDefinition _currentEditingClass; // 当前正在编辑的类（可能是主类，也可能是辅助类）
+    private ClassDefinition _currentEditingClass; 
 
+    /// <summary>
+    /// 当前数据库集合已绑定的 Schema 文件路径。
+    /// </summary>
     [ObservableProperty]
-    private string? _currentBoundPath; // 当前表已绑定的 Schema 路径
+    private string? _currentBoundPath; 
 
     private ClassDefinition? _selectedInnerClass;
+
+    /// <summary>
+    /// 选中的内部辅助类定义。
+    /// </summary>
     public ClassDefinition? SelectedInnerClass
     {
         get => _selectedInnerClass;
@@ -46,6 +66,9 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 命令：切换编辑目标回到主类。
+    /// </summary>
     [RelayCommand]
     private void SelectMainClass()
     {
@@ -53,27 +76,33 @@ public partial class SchemaEditorViewModel : ViewModelBase
         SelectedInnerClass = null;
     }
 
+    /// <summary>
+    /// 窗口显示的错误消息。
+    /// </summary>
     [ObservableProperty]
     private string? _errorMessage;
 
-    // 获取所有已定义的类名（用于字段类型快速引用）
+    /// <summary>
+    /// 当前已定义的类名列表，用于字段类型（Custom）的快速智能感知和选择。
+    /// </summary>
     public ObservableCollection<string> DefinedClassNames { get; } = new();
 
+    /// <summary>
+    /// 重新扫描所有定义的类名并刷新下拉列表。
+    /// </summary>
     public void RefreshClassNames()
     {
         var names = new List<string> { MainClass.ClassName };
         names.AddRange(MainClass.InnerClasses.Select(c => c.ClassName));
         var distinctNames = names.Distinct().OrderBy(n => n).ToList();
 
-        // 智能同步：保持集合引用和未变动项的稳定性
-        // 1. 移除已不存在的项
+        // 差量同步集合，避免全量替换导致 UI 闪烁或选择丢失
         var toRemove = DefinedClassNames.Where(n => !distinctNames.Contains(n)).ToList();
         foreach (var name in toRemove)
         {
             DefinedClassNames.Remove(name);
         }
 
-        // 2. 添加新项，并尝试保持现有顺序或直接追加
         foreach (var name in distinctNames)
         {
             if (!DefinedClassNames.Contains(name))
@@ -83,16 +112,24 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
-    // 现有模板列表 (对象列表，包含路径和绑定状态)
+    /// <summary>
+    /// 存储在管理目录下的现有模板文件列表。
+    /// </summary>
     public ObservableCollection<SchemaItem> ExistingSchemas { get; } = new();
 
-    // 可供选择的基础类型列表
+    /// <summary>
+    /// 获取基础类型列表供 UI 选择。
+    /// </summary>
     public FieldType[] AvailableTypes => Enum.GetValues<FieldType>();
 
-    // 容器子类型允许的类型（去除了 List 和 Dictionary）
+    /// <summary>
+    /// 获取容器（List/Dictionary）子元素可用的基础类型列表。
+    /// </summary>
     public FieldType[] AvailableSubTypes => new[] { FieldType.Int, FieldType.Float, FieldType.Bool, FieldType.String, FieldType.Custom };
 
-    // 字典 Key 允许的类型列表
+    /// <summary>
+    /// 获取字典键（Key）可用的类型列表。
+    /// </summary>
     public FieldType[] AvailableKeyTypes => new[] { FieldType.Int, FieldType.Float, FieldType.String };
 
     public SchemaEditorViewModel(string? initialFilePath = null, string? currentBoundPath = null)
@@ -103,7 +140,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
         if (!Directory.Exists(_schemaDir))
             Directory.CreateDirectory(_schemaDir);
 
-        _currentEditingClass = _mainClass; // 初始指向主类
+        _currentEditingClass = _mainClass; 
         _currentBoundPath = currentBoundPath;
 
         if (!string.IsNullOrEmpty(initialFilePath) && File.Exists(initialFilePath))
@@ -115,11 +152,14 @@ public partial class SchemaEditorViewModel : ViewModelBase
             _mainClass.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ClassDefinition.ClassName)) RefreshClassNames(); };
             LoadExistingSchemas();
             RefreshClassNames();
-            // 初始化时默认添加一个字段
+            // 默认添加一个初始字段
             AddField();
         }
     }
 
+    /// <summary>
+    /// 递归为所有类定义及其嵌套类订阅属性变更事件。
+    /// </summary>
     private void SubscribeClassChanges(ClassDefinition classDef)
     {
         classDef.PropertyChanged += (s, e) => { if (e.PropertyName == nameof(ClassDefinition.ClassName)) RefreshClassNames(); };
@@ -129,6 +169,9 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 从文件加载 Schema 定义。支持 .cs 源代码或 .schema.json 元数据。
+    /// </summary>
     public void LoadFromPath(string path)
     {
         try
@@ -150,13 +193,11 @@ public partial class SchemaEditorViewModel : ViewModelBase
             CurrentEditingClass = MainClass;
             SelectedInnerClass = null;
 
-            // 重新订阅所有类的变更通知
             SubscribeClassChanges(MainClass);
 
             LoadExistingSchemas();
             RefreshClassNames();
 
-            // 强制通知 UI 所有属性均已变动
             OnPropertyChanged(string.Empty);
         }
         catch (Exception ex)
@@ -165,6 +206,9 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 重新加载管理目录下的所有 Schema 文件。
+    /// </summary>
     private void LoadExistingSchemas()
     {
         ExistingSchemas.Clear();
@@ -172,7 +216,6 @@ public partial class SchemaEditorViewModel : ViewModelBase
         {
             var boundPath = CurrentBoundPath != null ? Path.GetFullPath(CurrentBoundPath).ToLowerInvariant() : null;
 
-            // 优先查找 .schema.json
             var files = Directory.GetFiles(_schemaDir, "*.schema.json");
             foreach (var f in files)
             {
@@ -185,7 +228,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
                 });
             }
             
-            // 兼容性查找 .cs
+            // 向上兼容旧版本的 .cs 备份文件
             var csFiles = Directory.GetFiles(_schemaDir, "*.cs");
             foreach (var f in csFiles)
             {
@@ -204,18 +247,27 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 命令：在当前编辑的类中添加一个新字段。
+    /// </summary>
     [RelayCommand]
     private void AddField()
     {
         CurrentEditingClass.Fields.Add(new FieldDefinition());
     }
 
+    /// <summary>
+    /// 命令：移除指定的字段。
+    /// </summary>
     [RelayCommand]
     private void RemoveField(FieldDefinition field)
     {
         CurrentEditingClass.Fields.Remove(field);
     }
 
+    /// <summary>
+    /// 命令：添加一个新的嵌套辅助类。
+    /// </summary>
     [RelayCommand]
     private void AddInnerClass()
     {
@@ -225,6 +277,9 @@ public partial class SchemaEditorViewModel : ViewModelBase
         RefreshClassNames();
     }
 
+    /// <summary>
+    /// 命令：移除指定的嵌套辅助类。
+    /// </summary>
     [RelayCommand]
     private void RemoveInnerClass(ClassDefinition inner)
     {
@@ -241,8 +296,12 @@ public partial class SchemaEditorViewModel : ViewModelBase
     private readonly SchemaMetadataService _metadataService = new();
 
     /// <summary>
-    /// 执行保存：生成 .schema.json 元数据，驱动数据库迁移，并备份 C# 脚本。
+    /// 执行保存逻辑：
+    /// 1. 验证所有类定义的合法性。
+    /// 2. 对比旧元数据，发现并同步重命名/物理删除等变更到数据库。
+    /// 3. 生成并持久化 .schema.json 元数据及 C# 脚本备份。
     /// </summary>
+    /// <returns>保存后的 Schema 文件路径，若失败则返回 null</returns>
     public string? SaveAndGenerate()
     {
         ErrorMessage = null;
@@ -258,19 +317,19 @@ public partial class SchemaEditorViewModel : ViewModelBase
             var fileName = $"{MainClass.ClassName.ToLowerInvariant()}.schema.json";
             var jsonPath = Path.Combine(_schemaDir, fileName);
             
-            // 1. 获取旧的元数据用于对比差异
+            // 步骤一：加载旧元数据用于对比
             var oldMeta = DataCenter.Metadata.LoadMetadata(jsonPath);
             
-            // 2. 如果存在旧元数据，执行数据库迁移 (根据 ID 追踪 Rename/Delete)
+            // 步骤二：执行数据库层面的一键迁移
             if (oldMeta != null)
             {
                 ApplyMetadataChanges(oldMeta, MainClass);
             }
 
-            // 3. 保存新的 JSON 元数据 (这是真理源)
+            // 步骤三：保存真理源元数据
             DataCenter.Metadata.SaveSchema(MainClass, jsonPath);
 
-            // 4. 同时备份生成 C# 脚本 (可选，供用户参考)
+            // 步骤四：备份 C# 代码供用户参考或二次开发
             var code = _generator.GenerateCode(MainClass);
             var csPath = Path.Combine(_schemaDir, $"{MainClass.ClassName.ToLowerInvariant()}.cs");
             File.WriteAllText(csPath, code);
@@ -286,35 +345,38 @@ public partial class SchemaEditorViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 对比新旧元数据，直接在数据库层面同步结构变更
+    /// 物理结构迁移逻辑：基于字段的唯一 ID 追踪其名称变更或被删除状态。
+    /// 该逻辑会直接对当前数据库执行 RenameField 或 RemoveFieldPermanently 操作。
     /// </summary>
     private void ApplyMetadataChanges(ClassDefinition oldClass, ClassDefinition newClass)
     {
-        // 核心逻辑：基于唯一 ID (GUID) 发现变更
-        // 1. 发现重命名 (ID 存在但 Name 变了)
+        // 核心：利用 GUID 追踪字段生命周期，而非依赖名称
         foreach (var newField in newClass.Fields)
         {
             var oldField = oldClass.Fields.FirstOrDefault(f => f.Id == newField.Id);
             if (oldField != null && oldField.FieldName != newField.FieldName)
             {
-                // 执行数据库重命名
+                // 执行数据库字段重命名迁移
                 DataCenter.Database.RenameField(newClass.ClassName, oldField.FieldName, newField.FieldName);
                 Console.WriteLine($"[SchemaSync] Renamed field: {oldField.FieldName} -> {newField.FieldName}");
             }
         }
 
-        // 2. 发现被删除的字段 (ID 在新的里面没了)
         foreach (var oldField in oldClass.Fields)
         {
+            // 如果旧字段 ID 不在新的定义列表中，则视为被永久删除
             if (!newClass.Fields.Any(f => f.Id == oldField.Id))
             {
-                // 执行数据库物理删除
+                // 物理抹除该字段在数据库中所有文档的数据
                 DataCenter.Database.RemoveFieldPermanently(newClass.ClassName, oldField.FieldName);
                 Console.WriteLine($"[SchemaSync] Physically removed field: {oldField.FieldName}");
             }
         }
     }
 
+    /// <summary>
+    /// 重置所有校验状态位。
+    /// </summary>
     private void ResetValidation(ClassDefinition classDef)
     {
         classDef.IsValid = true;
@@ -330,6 +392,9 @@ public partial class SchemaEditorViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// 递归验证类定义的合法性（命规范、关键字冲突、重名等）。
+    /// </summary>
     private bool ValidateClass(ClassDefinition classDef, string classPath)
     {
         if (string.IsNullOrWhiteSpace(classDef.ClassName) || !IsValidIdentifier(classDef.ClassName) || _forbiddenKeywords.Contains(classDef.ClassName.ToLowerInvariant()))
@@ -352,7 +417,6 @@ public partial class SchemaEditorViewModel : ViewModelBase
                 return false;
             }
 
-            // 核心修复：检查重名
             if (usedFieldNames.Contains(field.FieldName))
             {
                 field.IsValid = false;
@@ -373,7 +437,6 @@ public partial class SchemaEditorViewModel : ViewModelBase
                 }
             }
 
-            // 校验自定义类型类名非空
             if (field.Type == FieldType.Custom && string.IsNullOrWhiteSpace(field.CustomTypeName))
             {
                 field.IsValid = false;
@@ -382,7 +445,6 @@ public partial class SchemaEditorViewModel : ViewModelBase
                 return false;
             }
 
-            // 校验容器子类型（List/Dict Value）自定义类名非空
             if ((field.Type == FieldType.List || field.Type == FieldType.Dictionary) &&
                 field.SubType == FieldType.Custom && string.IsNullOrWhiteSpace(field.SubCustomTypeName))
             {
@@ -404,12 +466,18 @@ public partial class SchemaEditorViewModel : ViewModelBase
         return true;
     }
 
+    /// <summary>
+    /// 校验字符串是否为合法的 C# 标识符。
+    /// </summary>
     private bool IsValidIdentifier(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
         return Regex.IsMatch(name, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
     }
 
+    /// <summary>
+    /// 根据现有模板的文件名推断并获取编辑结果对象。
+    /// </summary>
     public SchemaEditorResult? GetResultFromExisting(string fileNameOrPath)
     {
         string fullPath;
@@ -424,9 +492,7 @@ public partial class SchemaEditorViewModel : ViewModelBase
 
         if (!File.Exists(fullPath)) return null;
 
-        // 尝试从文件名推断类名
         var className = Path.GetFileNameWithoutExtension(fullPath);
-        // 这里可以做一些简单的处理，比如首字母大写
         if (className.Length > 0)
             className = char.ToUpper(className[0]) + className.Substring(1);
 

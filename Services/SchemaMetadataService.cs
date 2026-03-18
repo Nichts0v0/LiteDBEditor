@@ -6,7 +6,8 @@ using LiteDBEditor.Models;
 namespace LiteDBEditor.Services;
 
 /// <summary>
-/// 负责 .schema.json 元数据的持久化与加载
+/// 负责 .schema.json 元数据文件的持久化与读取。
+/// 该元数据文件记录了类定义（ClassDefinition），用于在编辑器中描述 BsonDocument 的结构。
 /// </summary>
 public class SchemaMetadataService
 {
@@ -17,8 +18,10 @@ public class SchemaMetadataService
     };
 
     /// <summary>
-    /// 将类定义保存为 JSON 元数据
+    /// 将类定义对象序列化并保存为 JSON 元数据文件。
     /// </summary>
+    /// <param name="classDef">要保存的类定义对象</param>
+    /// <param name="filePath">目标文件路径</param>
     public void SaveSchema(ClassDefinition classDef, string filePath)
     {
         var jsonPath = GetJsonPath(filePath);
@@ -27,8 +30,10 @@ public class SchemaMetadataService
     }
 
     /// <summary>
-    /// 加载 JSON 元数据
+    /// 从指定的 JSON 元数据文件中加载类定义。
     /// </summary>
+    /// <param name="filePath">元数据文件路径</param>
+    /// <returns>反序列化后的类定义对象，若文件不存在或读取失败则返回 null</returns>
     public ClassDefinition? LoadMetadata(string filePath)
     {
         var jsonPath = GetJsonPath(filePath);
@@ -46,6 +51,9 @@ public class SchemaMetadataService
         }
     }
 
+    /// <summary>
+    /// 获取正确的 .schema.json 文件路径。如果传入的是其他后缀，则会进行转换。
+    /// </summary>
     private string GetJsonPath(string filePath)
     {
         if (filePath.EndsWith(".schema.json")) return filePath;

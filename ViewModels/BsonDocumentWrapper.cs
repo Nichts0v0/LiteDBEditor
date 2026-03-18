@@ -9,8 +9,9 @@ using LiteDBEditor.Models;
 namespace LiteDBEditor.ViewModels;
 
 /// <summary>
-/// A wrapper around BsonDocument to support dynamic data binding in Avalonia DataGrid.
-/// It uses a dictionary-like accessor to let DataGrid columns read and write values.
+/// BsonDocument 的包装类，旨在支持 Avalonia DataGrid 的动态数据绑定。
+/// 它通过索引器实现灵活的数据访问，并内部追踪所有待存的更改（新增、修改或字段删除），
+/// 从而支持“撤销修改”和“批量保存”功能。
 /// </summary>
 public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
 {
@@ -24,17 +25,17 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>
-    /// Indicates whether this wrapper has any unsaved modifications (updates or deletions).
+    /// 获取一个值，指示该包装器当前是否有任何未保存的修改（包括值变更或字段删除）。
     /// </summary>
     public bool IsModified => _pendingChanges.Count > 0 || _deletedFields.Count > 0;
 
     /// <summary>
-    /// Gets the list of fields marked for physical deletion.
+    /// 获取被标记为待删除的字段列表。
     /// </summary>
     public IEnumerable<string> DeletedFields => _deletedFields;
 
     /// <summary>
-    /// 记录数据从数据库加载时的初始 ID。
+    /// 记录数据从数据库加载时的初始 _id。
     /// 如果是新建数据尚未入库，则为 BsonValue.Null。
     /// </summary>
     public BsonValue OriginalId => _originalId;
@@ -43,12 +44,12 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _onModified = onModified;
-        // 初始化时捕获当前 ID，作为追踪旧记录的依据
+        // 初始化时捕获当前 ID，作为追踪旧记录的依据，防止因 ID 修改导致无法定位原始文档
         _originalId = _document.TryGetValue("_id", out var id) ? id : BsonValue.Null;
     }
 
     /// <summary>
-    /// 在数据库保存成功后调用，将当前 ID 标记为新的“原始 ID”。
+    /// 在数据库保存成功后调用，将当前最新的 ID 标记为新的“原始 ID”。
     /// </summary>
     public void SyncOriginalId()
     {
@@ -57,7 +58,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// Reverts all unsaved modifications (clears pending updates and deletions).
+    /// 还原所有未保存的修改，清空待存更新列表和待删除字段列表。
     /// </summary>
     public void ResetChanges()
     {
@@ -65,21 +66,24 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         _deletedFields.Clear();
         _fieldErrors.Clear();
         
-        // Notify UI that all field values might have changed back
+        // 通知 UI 所有字段值可能已回滚
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OriginalId)));
-        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(null)); // Clear all
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(null)); // 清除所有校验错误
     }
 
     /// <summary>
-    /// Checks if a specific field has unsaved changes.
+    /// 检查特定字段是否有尚未保存的更改。
     /// </summary>
     public bool IsFieldModified(string key)
     {
         return _pendingChanges.ContainsKey(key);
     }
 
+    /// <summary>
+    /// 接受所有更改，将待存列表中的值正式写入底层的 BsonDocument 实例并清空追踪状态。
+    /// </summary>
     public void AcceptChanges()
     {
         if (_pendingChanges.Count == 0 && _deletedFields.Count == 0) return;
@@ -101,7 +105,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// Discards all pending changes and reverts to the original BsonDocument state.
+    /// 丢弃所有未保存的更改，并触发 UI 刷新。
     /// </summary>
     public void RejectChanges()
     {
@@ -115,7 +119,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 将指定字段标记为待物理删除。
+    /// 将指定字段标记为待从 BsonDocument 中移除。
     /// </summary>
     public void RemoveField(string key)
     {
@@ -138,16 +142,16 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 包装器版本的严格 Schema 应用。
-    /// 通过标记修改或删除来确保 IsModified 被正确触发，从而保证“保存”有效。
+    /// 针对包装器实现的严格 Schema 应用逻辑。
+    /// 该方法会识别 Schema 变更并自动将其转化为本包装器的“修改”或“删除”指令，
+    /// 从而确保能够触发“保存”按钮并持久化到数据库。
     /// </summary>
     public bool ApplySchemaStrictly(LiteDBEditor.Services.SchemaParserService parser, SchemaData schema)
     {
-        // 1. 获取合并后的快照视图
+        // 1. 获取合并了当前待存更改后的快照视图
         var merged = GetMergedDocument();
         
-        // 2. 利用 parser 的启发式逻辑识别变化
-        // 注意：parser 里的逻辑需要调整为区分大小写，这里我们主要利用它识别 extra/missing
+        // 2. 利用 parser 的启发式逻辑识别字段定义的变化
         var allowedNames = new HashSet<string>(schema.Properties.Select(p => p.Name), StringComparer.Ordinal); // 强规则：区分大小写
         
         var currentKeys = merged.Keys.ToList();
@@ -156,9 +160,8 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
 
         bool hasChanged = false;
 
-        // --- 智能重分发 (Smart Migration) ---
-        // 只有当“冗余字段名”和“缺失字段名”在忽略大小写的情况下一致时，才判定为重命名
-        // 否则，防止用户删除 A 增加 B 时，A 的数据错误跑到了 B 里面
+        // --- 智能字段迁移 (Smart Migration) ---
+        // 如果冗余字段名和缺失字段名仅有大小写差异，则自动视为重命名并迁移数据
         if (extraKeys.Count == 1 && missingNames.Count == 1 && 
             string.Equals(extraKeys[0], missingNames[0], StringComparison.OrdinalIgnoreCase))
         {
@@ -173,7 +176,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         }
         else
         {
-            // --- 正常清理：不满足重命名条件，直接全部移除 ---
+            // --- 冗余清理：移除不在 Schema 范围内的所有多余字段 ---
             foreach (var extra in extraKeys)
             {
                 RemoveField(extra);
@@ -184,11 +187,14 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         return hasChanged;
     }
 
+    /// <summary>
+    /// 获取包装的原始 BsonDocument 实例。
+    /// </summary>
     public BsonDocument Document => _document;
 
     /// <summary>
-    /// 返回将待存更改并入地合并的完整文档快照，不修改原始内存。
-    /// 用于创建编辑弹窗时的克隆源。
+    /// 返回将当前待存更改与原始文档合并后的完整快照，该操作不会修改任何原始状态。
+    /// 常用于在打开编辑详情窗口时提供一个独立的克隆副本。
     /// </summary>
     public BsonDocument GetMergedDocument()
     {
@@ -203,7 +209,8 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 获取某个字段的原始 BsonValue，优先从待存更改中取，用于需要对透实际数据进行操作的场景。
+    /// 获取某个字段当前的 BsonValue 原始值。
+    /// 逻辑：优先从待存更改列表中取，若无则从底层文档取。
     /// </summary>
     public BsonValue GetRawValue(string key)
     {
@@ -213,10 +220,11 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 将改动后的 BsonValue 写回待存列表并发出下载刷新通知。
+    /// 直接将某个 BsonValue 写入待存列表，并通知 UI 刷新该字段。
     /// </summary>
     public void SetRawValueAndNotify(string key, BsonValue value)
     {
+        // 如果设定的值与数据库原始值一致，则从待存列表中移除（表示未修改）
         if (_document.TryGetValue(key, out var dbVal) && dbVal == value)
             _pendingChanges.Remove(key);
         else
@@ -231,13 +239,19 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
 
     public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
 
+    /// <summary>
+    /// 指示该包装器当前是否有任何校验错误。
+    /// </summary>
     public bool HasErrors => _fieldErrors.Any();
 
+    /// <summary>
+    /// 获取指定属性名的所有错误。
+    /// </summary>
     public IEnumerable GetErrors(string? propertyName)
     {
         if (string.IsNullOrEmpty(propertyName)) return Enumerable.Empty<string>();
 
-        // DataGrid 绑定针对索引器可能产生 "Item[PropName]" 或 "[PropName]"
+        // 处理 DataGrid 可能生成的各种形式的索引器属性名
         string key = propertyName;
         if (propertyName.StartsWith("Item["))
             key = propertyName.Substring(5, propertyName.Length - 6);
@@ -251,7 +265,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 设置某个字段的错误消息。
+    /// 为指定字段设置或清除错误消息。
     /// </summary>
     public void SetError(string key, string? errorMessage)
     {
@@ -265,12 +279,12 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// 获取某个字段是否存在错误。
+    /// 检查某个字段是否存在错误。
     /// </summary>
     public bool HasFieldError(string key) => _fieldErrors.ContainsKey(key);
 
     /// <summary>
-    /// 清除所有字段错误。
+    /// 清除该包装器的所有字段错误信息。
     /// </summary>
     public void ClearAllErrors()
     {
@@ -285,16 +299,16 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     #endregion
 
     /// <summary>
-    /// 当内容通过外部直接修改了（不经过索引器 setter）时，主动标记该字段为脚数据并通知 UI。
+    /// 手动标记某个字段已修改。
+    /// 当在外部直接通过引用修改了 BsonDocument（如修改嵌套数组/文档）时，
+    /// 需要调用此方法来确何更改被追踪并通知 UI 刷新。
     /// </summary>
     public void MarkModifiedAndNotify(string key)
     {
-        // 为外部就地修改的 Array/Document 确保它也被记入脚数据列表
         if (!_pendingChanges.ContainsKey(key))
         {
-            // 获取共享引用（如果存在）直接用它
             if (_document.TryGetValue(key, out var orig))
-                _pendingChanges[key] = orig; // 存结构引用，不是剥离副本
+                _pendingChanges[key] = orig; 
         }
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs($"Item[{key}]"));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));
@@ -304,25 +318,24 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
     }
 
     /// <summary>
-    /// Forces a refresh of all properties bound to this wrapper 
-    /// (useful when the underlying BsonDocument is replaced or heavily modified externally).
+    /// 强制刷新此包装器的所有绑定属性。
     /// </summary>
     public void RefreshAll()
     {
-        // 传递 string.Empty 告诉 UI 本对象的所有属性全脏需要重画
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
-        // 显式通知索引器属性名变更
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
     }
 
-    // Indexer for DataGrid TextColumn Binding (e.g., Binding[Name]).
+    /// <summary>
+    /// 提供给 DataGrid Column 使用的索引器绑定。
+    /// 逻辑：get 时自动将 BsonValue 转换为字符串；set 时尝试按目标类型反向解析回 BsonValue。
+    /// </summary>
     public string? this[string key]
     {
         get
         {
-            // 优先查找脏值
             BsonValue? bsonValue = null;
             if (_pendingChanges.TryGetValue(key, out var pendingVal))
             {
@@ -346,7 +359,7 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
 
             var newVal = ConvertToBsonValue(value, _document[key]?.Type ?? BsonType.String);
 
-            // 如果填改回来的值恰好与最早最原本的库里的老值内容一致了
+            // 智能回滚：如果修改回了数据库原始值，则从待存列表中移除该字段
             if (_document.TryGetValue(key, out var dbVal) && dbVal == newVal)
             {
                 _pendingChanges.Remove(key);
@@ -356,23 +369,23 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
                 _pendingChanges[key] = newVal;
             }
 
-            // 修改值时，自动清除该字段的旧错误提示
+            // 修改值时自动清除之前的旧错误
             if (_fieldErrors.Remove(key))
             {
                 ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs($"Item[{key}]"));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasErrors)));
             }
 
-            // 通知单个值更新以重绘高亮
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs($"Item[{key}]"));
-            // 通知整体脏数据标记
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsModified)));
 
-            // Call up to tell VM we have changes
             _onModified?.Invoke(this);
         }
     }
 
+    /// <summary>
+    /// 将 BsonValue 解析为适合 UI 编辑器显示的字符串。
+    /// </summary>
     private string? ExtractValue(BsonValue bsonValue)
     {
         if (bsonValue.IsNull) return null;
@@ -392,6 +405,9 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         };
     }
 
+    /// <summary>
+    /// 将字符串输入尝试解析为指定的 BsonType。
+    /// </summary>
     public BsonValue ConvertToBsonValue(string? stringVal, BsonType targetType)
     {
         if (string.IsNullOrEmpty(stringVal)) return BsonValue.Null;
@@ -413,10 +429,14 @@ public class BsonDocumentWrapper : INotifyPropertyChanged, INotifyDataErrorInfo
         }
         catch
         {
+            // 解析失败时作为普通字符串处理，防止崩溃
             return new BsonValue(stringVal);
         }
     }
 
+    /// <summary>
+    /// 尝试将字符串解析为 JSON，并验证是否为预期的 BsonDocument 或 BsonArray。
+    /// </summary>
     private BsonValue TryParseAsBson(string jsonContent, BsonType targetType)
     {
         if (string.IsNullOrWhiteSpace(jsonContent))

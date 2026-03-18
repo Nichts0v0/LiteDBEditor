@@ -59,12 +59,17 @@ public class DatabaseService : IDisposable
 
     #region 核心集合与数据操作
 
+    /// <summary>
+    /// 在当前数据库中创建一个新的集合。
+    /// </summary>
+    /// <param name="collectionName">集合名称</param>
     public void CreateCollection(string collectionName)
     {
         if (_database == null) return;
         var collection = _database.GetCollection(collectionName);
 
-        // 为了确保能产生物理文件级别的追踪记录（而不仅仅是代码对象），在此立即塞入后删除
+        // 为了确保能产生物理文件级别的追踪记录（而不仅仅是代码对象），在此立即塞入后删除。
+        // LiteDB 在真正有数据写入前可能不会创建物理集合结构。
         var id = ObjectId.NewObjectId();
         var fake = new BsonDocument();
         fake["_id"] = id;
@@ -72,12 +77,22 @@ public class DatabaseService : IDisposable
         collection.Delete(id);
     }
 
+    /// <summary>
+    /// 删除数据库中的指定集合。
+    /// </summary>
+    /// <param name="collectionName">集合名称</param>
     public void DropCollection(string collectionName)
     {
         if (_database == null) return;
         _database.DropCollection(collectionName);
     }
 
+    /// <summary>
+    /// 重命名指定的集合。
+    /// </summary>
+    /// <param name="oldName">旧名称</param>
+    /// <param name="newName">新名称</param>
+    /// <returns>操作是否成功</returns>
     public bool RenameCollection(string oldName, string newName)
     {
         if (_database == null || string.IsNullOrWhiteSpace(newName)) return false;

@@ -7,8 +7,16 @@ using LiteDBEditor.Models;
 
 namespace LiteDBEditor.Services;
 
+/// <summary>
+/// C# 代码生成与解析服务，用于根据结构定义生成 POCO 类，或从源码中逆向解析类定义。
+/// </summary>
 public class CSharpGeneratorService
 {
+    /// <summary>
+    /// 根据类定义对象生成完整的 C# 源码。
+    /// </summary>
+    /// <param name="mainClass">主类定义信息</param>
+    /// <returns>生成的 C# 源代码字符串</returns>
     public string GenerateCode(ClassDefinition mainClass)
     {
         var sb = new StringBuilder();
@@ -24,12 +32,18 @@ public class CSharpGeneratorService
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 递归生成 C# 类结构。
+    /// </summary>
+    /// <param name="sb">StringBuilder 实例</param>
+    /// <param name="classDef">当前类定义</param>
+    /// <param name="isMainClass">是否为入口主类（主类会强制生成 [BsonId]）</param>
     private void GenerateClass(StringBuilder sb, ClassDefinition classDef, bool isMainClass)
     {
         sb.AppendLine($"public class {classDef.ClassName}");
         sb.AppendLine("{");
 
-        // 仅主类生成 _id 且固定为 string
+        // 仅主类生成 _id 且固定为 string，用于满足 LiteDB 默认主键要求
         if (isMainClass && !classDef.Fields.Any(f => f.FieldName.Equals("_id", StringComparison.OrdinalIgnoreCase) || f.FieldName.Equals("Id", StringComparison.OrdinalIgnoreCase)))
         {
             sb.AppendLine("    [BsonId]");
@@ -45,7 +59,7 @@ public class CSharpGeneratorService
 
         sb.AppendLine("}");
 
-        // 递归生成辅助类
+        // 递归生成所有内部嵌套类
         foreach (var inner in classDef.InnerClasses)
         {
             sb.AppendLine();
@@ -53,6 +67,9 @@ public class CSharpGeneratorService
         }
     }
 
+    /// <summary>
+    /// 将内部枚举类型转换为 C# 类型关键字或自定义类名。
+    /// </summary>
     private string GetTypeString(FieldType type, string? custom, FieldType sub, string? subCustom, FieldType key, string? keyCustom)
     {
         return type switch
@@ -68,10 +85,15 @@ public class CSharpGeneratorService
         };
     }
 
+    /// <summary>
+    /// 解析 C# 源码字符串，提取出类及其字段定义。
+    /// </summary>
+    /// <param name="code">C# 源代码文本</param>
+    /// <returns>解析出的主类定义对象</returns>
     public ClassDefinition ParseCode(string code)
     {
         ClassDefinition? mainClass = null;
-        // 匹配类定义头：修饰符可选，支持 partial
+        // 匹配类定义头：支持可选修饰符及 partial 关键字
         var headerRegex = new Regex(@"(?:(?:public|internal|private|protected)\s+)?(?:partial\s+)?class\s+(\w+)", RegexOptions.Multiline);
         var matches = headerRegex.Matches(code);
 
@@ -81,6 +103,7 @@ public class CSharpGeneratorService
             int startBrace = code.IndexOf('{', match.Index + match.Length);
             if (startBrace == -1) continue;
 
+            // 简单的花括号匹配逻辑，用于提取类体
             int braceCount = 1;
             int endIdx = -1;
             for (int i = startBrace + 1; i < code.Length; i++)
@@ -95,12 +118,7 @@ public class CSharpGeneratorService
             var classBody = code.Substring(startBrace + 1, endIdx - startBrace - 1);
             var currentClass = new ClassDefinition { ClassName = className };
 
-            // 修改：增强正则表达式
-            // 1. 匹配特性
-            // 2. 匹配修饰符（增加更多 C# 修饰符）
-            // 3. 匹配类型（支持点号、空格、尖括号、方括号）
-            // 4. 匹配名称
-            // 5. 匹配结尾（{get;set;} 或分号或赋值）
+            // 增强的正则表达式：匹配字段、属性及其可能的特性和修饰符
             var fieldRegex = new Regex(@"(?:\[[^\]]*\]\s*)?(?:(?:public|private|protected|internal|static|readonly|virtual|override|new|async|required)\s+)*([\w<, >\[\].]+?)\s+(\w+)\s*(?:\{[\s\S]*?\}|;|=[\s\S]*?;)", RegexOptions.Multiline);
             var fieldMatches = fieldRegex.Matches(classBody);
 
@@ -109,6 +127,7 @@ public class CSharpGeneratorService
                 var typeStr = m.Groups[1].Value.Trim();
                 var name = m.Groups[2].Value;
 
+                // 跳过主键字段，它在生成时会根据规则自动处理
                 if (name == "_id") continue;
 
                 var field = new FieldDefinition { FieldName = name };
@@ -123,17 +142,18 @@ public class CSharpGeneratorService
         return mainClass ?? new ClassDefinition();
     }
 
+    /// <summary>
+    /// 将 C# 类型字符串（如 List&lt;string&gt;）解析并填充到 FieldDefinition 中。
+    /// </summary>
     private void ParseTypeString(string typeStr, FieldDefinition field)
     {
         typeStr = typeStr.Trim();
 
-        // 核心修复：如果修饰符漏网进入了类型字符串，在此处强制剥离
-        // 匹配字段可能带有的所有常见修饰符，并只取最后一部分作为类型
+        // 核心修复：手动剥离可能混入类型字符串中的修饰符
         var modifiers = new[] { "public", "private", "protected", "internal", "static", "readonly", "virtual", "override", "new", "async", "required" };
         var typeParts = typeStr.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         if (typeParts.Length > 1)
         {
-            // 过滤掉所有修饰符，保留剩余部分（通常是最后一个或带尖括号的整体）
             var filteredParts = typeParts.Where(p => !modifiers.Contains(p.ToLowerInvariant())).ToList();
             if (filteredParts.Count > 0)
             {
@@ -141,7 +161,7 @@ public class CSharpGeneratorService
             }
         }
 
-        // 预处理：去掉常见的命名空间前缀 (简单处理)
+        // 剥离常见的系统命名空间前缀
         if (typeStr.StartsWith("System."))
         {
             if (!typeStr.Contains("<") && !typeStr.Contains("["))
@@ -170,7 +190,7 @@ public class CSharpGeneratorService
         else if (Regex.IsMatch(typeStr, @"^List\s*<"))
         {
             field.Type = FieldType.List;
-            // 提取 < > 内部内容
+            // 提取泛型参数内容
             var match = Regex.Match(typeStr, @"<([\s\S]+)>");
             if (match.Success)
             {

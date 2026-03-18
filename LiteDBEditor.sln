@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiteDBEditor", "LiteDBEditor.csproj", "{CC876153-BB45-42BC-258D-0935251BA557}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CC876153-BB45-42BC-258D-0935251BA557}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC876153-BB45-42BC-258D-0935251BA557}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC876153-BB45-42BC-258D-0935251BA557}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC876153-BB45-42BC-258D-0935251BA557}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {422195AE-2E94-4216-ADF2-605ABB92612F}
+	EndGlobalSection
+EndGlobal

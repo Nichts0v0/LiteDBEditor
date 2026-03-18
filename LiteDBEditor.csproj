@@ -15,10 +15,10 @@
     <Copyright>Copyright © 2026 Nichts Studio</Copyright> <!-- 版权信息 -->
 
     <!-- 版本号控制 -->
-    <Version>0.1.5.0</Version>
+    <Version>0.1.5.2</Version>
     <AssemblyName>LiteDBEditor</AssemblyName>
-    <AssemblyVersion>0.1.5.0</AssemblyVersion>
-    <FileVersion>0.1.5.0</FileVersion>
+    <AssemblyVersion>0.1.5.2</AssemblyVersion>
+    <FileVersion>0.1.5.2</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
